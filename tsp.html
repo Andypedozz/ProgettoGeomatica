@@ -1,430 +1,451 @@
 <!DOCTYPE html>
 <html lang="it">
+
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-<title>Ottimizzazione Percorsi Multi-Tappa (TSP su rete reale)</title>
+    <title>Ottimizzazione Percorsi Multi-Tappa (TSP su rete reale)</title>
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 
-<style>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial;
+            background: #f5f5f5;
+        }
 
-body { margin:0; font-family:Arial; background:#f5f5f5; }
+        header {
+            background: #1f2937;
+            color: white;
+            padding: 14px;
+        }
 
-header {
-    background:#1f2937;
-    color:white;
-    padding:14px;
-}
+        .container {
+            display: flex;
+            height: calc(100vh - 80px);
+        }
 
-.container {
-    display:flex;
-    height: calc(100vh - 80px);
-}
+        .sidebar {
+            width: 360px;
+            background: white;
+            padding: 14px;
+            overflow: auto;
+            border-right: 1px solid #ddd;
+        }
 
-.sidebar {
-    width:360px;
-    background:white;
-    padding:14px;
-    overflow:auto;
-    border-right:1px solid #ddd;
-}
+        #map {
+            flex: 1;
+        }
 
-#map { flex:1; }
+        input,
+        select,
+        button {
+            width: 100%;
+            padding: 10px;
+            margin: 6px 0;
+        }
 
-input, select, button {
-    width:100%;
-    padding:10px;
-    margin:6px 0;
-}
+        button {
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
 
-button {
-    border:none;
-    border-radius:6px;
-    cursor:pointer;
-}
+        .primary {
+            background: #2563eb;
+            color: white;
+        }
 
-.primary { background:#2563eb; color:white; }
-.danger { background:#dc2626; color:white; }
+        .danger {
+            background: #dc2626;
+            color: white;
+        }
 
-.stop-item {
-    background:#f3f4f6;
-    padding:8px;
-    margin:6px 0;
-    border-radius:6px;
-}
+        .stop-item {
+            background: #f3f4f6;
+            padding: 8px;
+            margin: 6px 0;
+            border-radius: 6px;
+        }
 
-.marker div {
-    background:#2563eb;
-    color:white;
-    width:28px;
-    height:28px;
-    border-radius:50%;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-weight:bold;
-}
+        .marker div {
+            background: #2563eb;
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
 
-.start div { background:#16a34a; }
-.end div { background:#dc2626; }
+        .start div {
+            background: #16a34a;
+        }
 
-</style>
+        .end div {
+            background: #dc2626;
+        }
+    </style>
 </head>
+
 <body>
 
-<header>
-<h2>Ottimizzazione Percorsi Multi-Tappa (TSP su rete stradale reale)</h2>
-</header>
+    <header>
+        <h2>Ottimizzazione Percorsi Multi-Tappa (TSP su rete stradale reale)</h2>
+    </header>
 
-<div class="container">
+    <div class="container">
 
-<div class="sidebar">
+        <div class="sidebar">
 
-<h3>Inserisci indirizzo</h3>
+            <h3>Inserisci indirizzo</h3>
 
-<input id="addr" placeholder="Es. Via Roma 10, Urbino">
-<button class="primary" onclick="addByAddress()">Aggiungi indirizzo</button>
+            <input id="addr" placeholder="Es. Via Roma 10, Urbino">
+            <button class="primary" onclick="addByAddress()">Aggiungi indirizzo</button>
 
-<h3>Oppure clicca sulla mappa</h3>
+            <h3>Oppure clicca sulla mappa</h3>
 
-<select id="mode">
-    <option value="driving">Auto</option>
-    <option value="walking">Piedi</option>
-</select>
+            <select id="mode">
+                <option value="driving">Auto</option>
+                <option value="walking">Piedi</option>
+            </select>
 
-<select id="algo">
-    <option value="nearest">Nearest Neighbor</option>
-    <option value="bruteforce">Brute Force</option>
-</select>
+            <select id="algo">
+                <option value="nearest">Nearest Neighbor</option>
+                <option value="bruteforce">Brute Force</option>
+            </select>
 
-<button class="primary" onclick="calculate()">Calcola percorso</button>
-<button class="danger" onclick="clearAll()">Reset</button>
+            <button class="primary" onclick="calculate()">Calcola percorso</button>
+            <button class="danger" onclick="clearAll()">Reset</button>
 
-<h3>Tappe</h3>
-<div id="list"></div>
+            <h3>Tappe</h3>
+            <div id="list"></div>
 
-<div id="result"></div>
+            <div id="result"></div>
 
-</div>
+        </div>
 
-<div id="map"></div>
+        <div id="map"></div>
 
-</div>
+    </div>
 
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
-<script>
+    <script>
 
-const map = L.map('map').setView([43.726, 12.636], 7);
+        const map = L.map('map').setView([43.726, 12.636], 7);
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-attribution:'&copy; OSM'
-}).addTo(map);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OSM'
+        }).addTo(map);
 
-let points = [];
-let markers = [];
-let routeLayer = null;
-let distanceMatrix = [];
+        let points = [];
+        let markers = [];
+        let routeLayer = null;
+        let distanceMatrix = [];
 
-// --------------------
-// CLICK MAPPA
-// --------------------
-map.on('click', e => {
-    addPoint(e.latlng.lat, e.latlng.lng);
-});
+        // --------------------
+        // CLICK MAPPA
+        // --------------------
+        map.on('click', e => {
+            addPoint(e.latlng.lat, e.latlng.lng);
+        });
 
-// --------------------
-// GEOCODING
-// --------------------
-async function geocode(addr){
+        // --------------------
+        // GEOCODING
+        // --------------------
+        async function geocode(addr) {
 
-const url =
-`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}`;
+            const url =
+                `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}`;
 
-const r = await fetch(url);
-const d = await r.json();
+            const r = await fetch(url);
+            const d = await r.json();
 
-if(!d.length) return null;
+            if (!d.length) return null;
 
-return {
-lat: +d[0].lat,
-lng: +d[0].lon
-};
+            return {
+                lat: +d[0].lat,
+                lng: +d[0].lon
+            };
 
-}
+        }
 
-// --------------------
-async function addByAddress(){
+        // --------------------
+        async function addByAddress() {
 
-let addr = document.getElementById('addr').value;
-if(!addr) return;
+            let addr = document.getElementById('addr').value;
+            if (!addr) return;
 
-let g = await geocode(addr);
-if(!g) return alert("Non trovato");
+            let g = await geocode(addr);
+            if (!g) return alert("Non trovato");
 
-addPoint(g.lat, g.lng);
-map.setView([g.lat, g.lng], 13);
+            addPoint(g.lat, g.lng);
+            map.setView([g.lat, g.lng], 13);
 
-}
+        }
 
-// --------------------
-function addPoint(lat,lng){
+        // --------------------
+        function addPoint(lat, lng) {
 
-points.push({lat,lng});
+            points.push({ lat, lng });
 
-let m = L.marker([lat,lng]).addTo(map);
+            let m = L.marker([lat, lng]).addTo(map);
 
-m.on('click', ()=> removeMarker(m));
+            m.on('click', () => removeMarker(m));
 
-markers.push(m);
+            markers.push(m);
 
-updateList();
+            updateList();
 
-}
+        }
 
-// --------------------
-function removeMarker(marker){
+        // --------------------
+        function removeMarker(marker) {
 
-let i = markers.indexOf(marker);
+            let i = markers.indexOf(marker);
 
-if(i!=-1){
+            if (i != -1) {
 
-map.removeLayer(marker);
-markers.splice(i,1);
-points.splice(i,1);
+                map.removeLayer(marker);
+                markers.splice(i, 1);
+                points.splice(i, 1);
 
-updateList();
-clearRoute();
+                updateList();
+                clearRoute();
 
-}
+            }
 
-}
+        }
 
-// --------------------
-function updateList(){
+        // --------------------
+        function updateList() {
 
-document.getElementById('list').innerHTML =
-points.map((p,i)=>`<div class="stop-item">Tappa ${i+1}</div>`).join('');
+            document.getElementById('list').innerHTML =
+                points.map((p, i) => `<div class="stop-item">Tappa ${i + 1}</div>`).join('');
 
-}
+        }
 
-// --------------------
-// DIST MATRICE (TEMPI REALI)
-// --------------------
-async function buildMatrix(points, mode){
+        // --------------------
+        // DIST MATRICE (TEMPI REALI)
+        // --------------------
+        async function buildMatrix(points, mode) {
 
-let n = points.length;
+            let n = points.length;
 
-distanceMatrix = Array.from({length:n},()=>Array(n).fill(0));
+            distanceMatrix = Array.from({ length: n }, () => Array(n).fill(0));
 
-for(let i=0;i<n;i++){
+            for (let i = 0; i < n; i++) {
 
-for(let j=0;j<n;j++){
+                for (let j = 0; j < n; j++) {
 
-if(i===j) continue;
+                    if (i === j) continue;
 
-let coords =
-`${points[i].lng},${points[i].lat};${points[j].lng},${points[j].lat}`;
+                    let coords =
+                        `${points[i].lng},${points[i].lat};${points[j].lng},${points[j].lat}`;
 
-let url =
-`https://router.project-osrm.org/route/v1/${mode}/${coords}?overview=false`;
+                    let url =
+                        `https://router.project-osrm.org/route/v1/${mode}/${coords}?overview=false`;
 
-try{
+                    try {
 
-let r = await fetch(url);
-let d = await r.json();
+                        let r = await fetch(url);
+                        let d = await r.json();
 
-distanceMatrix[i][j] =
-d.routes[0].duration;
+                        distanceMatrix[i][j] =
+                            d.routes[0].duration;
 
-}catch{
+                    } catch {
 
-distanceMatrix[i][j]=Infinity;
+                        distanceMatrix[i][j] = Infinity;
 
-}
+                    }
 
-}
+                }
 
-}
+            }
 
-}
+        }
 
-// --------------------
-function nearestReal(points){
+        // --------------------
+        function nearestReal(points) {
 
-let rem=[...points], path=[];
+            let rem = [...points], path = [];
 
-let cur=rem.shift();
-path.push(cur);
+            let cur = rem.shift();
+            path.push(cur);
 
-while(rem.length){
+            while (rem.length) {
 
-let ci=points.indexOf(cur);
+                let ci = points.indexOf(cur);
 
-let best=0, bestv=1e9;
+                let best = 0, bestv = 1e9;
 
-for(let i=0;i<rem.length;i++){
+                for (let i = 0; i < rem.length; i++) {
 
-let j=points.indexOf(rem[i]);
+                    let j = points.indexOf(rem[i]);
 
-let v=distanceMatrix[ci][j];
+                    let v = distanceMatrix[ci][j];
 
-if(v<bestv){
-bestv=v; best=i;
-}
+                    if (v < bestv) {
+                        bestv = v; best = i;
+                    }
 
-}
+                }
 
-cur=rem.splice(best,1)[0];
-path.push(cur);
+                cur = rem.splice(best, 1)[0];
+                path.push(cur);
 
-}
+            }
 
-return path;
+            return path;
 
-}
+        }
 
-// --------------------
-function bruteReal(points){
+        // --------------------
+        function bruteReal(points) {
 
-if(points.length>8) return nearestReal(points);
+            if (points.length > 8) return nearestReal(points);
 
-let start=points[0], rest=points.slice(1);
+            let start = points[0], rest = points.slice(1);
 
-let best=null, bestCost=1e9;
+            let best = null, bestCost = 1e9;
 
-function cost(p){
+            function cost(p) {
 
-let s=0;
+                let s = 0;
 
-for(let i=1;i<p.length;i++){
+                for (let i = 1; i < p.length; i++) {
 
-let a=points.indexOf(p[i-1]);
-let b=points.indexOf(p[i]);
+                    let a = points.indexOf(p[i - 1]);
+                    let b = points.indexOf(p[i]);
 
-s+=distanceMatrix[a][b];
+                    s += distanceMatrix[a][b];
 
-}
+                }
 
-return s;
+                return s;
 
-}
+            }
 
-function perm(a,c=[]){
+            function perm(a, c = []) {
 
-if(!a.length){
+                if (!a.length) {
 
-let p=[start,...c];
+                    let p = [start, ...c];
 
-let v=cost(p);
+                    let v = cost(p);
 
-if(v<bestCost){
-bestCost=v; best=p;
-}
+                    if (v < bestCost) {
+                        bestCost = v; best = p;
+                    }
 
-return;
+                    return;
 
-}
+                }
 
-for(let i=0;i<a.length;i++){
+                for (let i = 0; i < a.length; i++) {
 
-let n=[...a];
-let [x]=n.splice(i,1);
+                    let n = [...a];
+                    let [x] = n.splice(i, 1);
 
-perm(n,[...c,x]);
+                    perm(n, [...c, x]);
 
-}
+                }
 
-}
+            }
 
-perm(rest);
+            perm(rest);
 
-return best;
+            return best;
 
-}
+        }
 
-// --------------------
-async function calculate(){
+        // --------------------
+        async function calculate() {
 
-if(points.length<2) return alert("Min 2 tappe");
+            if (points.length < 2) return alert("Min 2 tappe");
 
-clearRoute();
+            clearRoute();
 
-let mode=document.getElementById('mode').value;
-let algo=document.getElementById('algo').value;
+            let mode = document.getElementById('mode').value;
+            let algo = document.getElementById('algo').value;
 
-await buildMatrix(points, mode);
+            await buildMatrix(points, mode);
 
-let order =
-algo=="nearest"
-? nearestReal(points)
-: bruteReal(points);
+            let order =
+                algo == "nearest"
+                    ? nearestReal(points)
+                    : bruteReal(points);
 
-await drawRoute(order, mode);
+            await drawRoute(order, mode);
 
-rebuildMarkers(order);
+            rebuildMarkers(order);
 
-}
+        }
 
-// --------------------
-// ROUTING OSRM
-// --------------------
-async function drawRoute(route, mode){
+        // --------------------
+        // ROUTING OSRM
+        // --------------------
+        async function drawRoute(route, mode) {
 
-let coords =
-route.map(p=>`${p.lng},${p.lat}`).join(';');
+            let coords =
+                route.map(p => `${p.lng},${p.lat}`).join(';');
 
-let url =
-`https://router.project-osrm.org/route/v1/${mode}/${coords}?overview=full&geometries=geojson`;
+            let url =
+                `https://router.project-osrm.org/route/v1/${mode}/${coords}?overview=full&geometries=geojson`;
 
-let r=await fetch(url);
-let d=await r.json();
+            let r = await fetch(url);
+            let d = await r.json();
 
-routeLayer = L.geoJSON(d.routes[0].geometry,{
-style:{color:"blue",weight:5}
-}).addTo(map);
+            routeLayer = L.geoJSON(d.routes[0].geometry, {
+                style: { color: "blue", weight: 5 }
+            }).addTo(map);
 
-map.fitBounds(routeLayer.getBounds());
+            map.fitBounds(routeLayer.getBounds());
 
-}
+        }
 
-// --------------------
-function rebuildMarkers(route){
+        // --------------------
+        function rebuildMarkers(route) {
 
-markers.forEach(m=>map.removeLayer(m));
-markers=[];
+            markers.forEach(m => map.removeLayer(m));
+            markers = [];
 
-route.forEach((p,i)=>{
+            route.forEach((p, i) => {
 
-let icon=L.divIcon({
-className:"marker "+(i==0?"start":i==route.length-1?"end":""),
-html:`<div>${i+1}</div>`
-});
+                let icon = L.divIcon({
+                    className: "marker " + (i == 0 ? "start" : i == route.length - 1 ? "end" : ""),
+                    html: `<div>${i + 1}</div>`
+                });
 
-markers.push(
-L.marker([p.lat,p.lng],{icon}).addTo(map)
-);
+                markers.push(
+                    L.marker([p.lat, p.lng], { icon }).addTo(map)
+                );
 
-});
+            });
 
-}
+        }
 
-// --------------------
-function clearRoute(){
-if(routeLayer) map.removeLayer(routeLayer);
-}
+        // --------------------
+        function clearRoute() {
+            if (routeLayer) map.removeLayer(routeLayer);
+        }
 
-function clearAll(){
-markers.forEach(m=>map.removeLayer(m));
-markers=[];
-points=[];
-clearRoute();
-updateList();
-}
+        function clearAll() {
+            markers.forEach(m => map.removeLayer(m));
+            markers = [];
+            points = [];
+            clearRoute();
+            updateList();
+        }
 
-</script>
+    </script>
 
 </body>
+
 </html>
