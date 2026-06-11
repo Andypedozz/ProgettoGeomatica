@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TSP Optimizer Pro</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h3>TSP Optimizer Pro</h3>
+  </header>
+
+  <div class="container">
+    <div class="sidebar">
+      <input id="addr" placeholder="Inserisci indirizzo" />
+      <button class="primary" onclick="app.addByAddress()">Aggiungi</button>
+
+      <select id="mode">
+        <option value="driving">Auto</option>
+        <option value="walking">Piedi</option>
+      </select>
+
+      <select id="algo">
+        <option value="nn">Nearest Neighbor (multi-start)</option>
+        <option value="twoopt">2-Opt (migliore qualità)</option>
+      </select>
+
+      <button class="primary" onclick="app.calculate()">Calcola percorso</button>
+      <button class="danger" onclick="app.reset()">Reset</button>
+
+      <div id="loading">Calcolo in corso...</div>
+
+      <h4>Tappe</h4>
+      <div id="list"></div>
+
+      <div id="result"></div>
+    </div>
+
+    <div id="map"></div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
