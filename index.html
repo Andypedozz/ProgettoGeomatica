@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>OpenTravel | Percorsi ottimali con profilo altimetrico</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="header">
+    <h1>
+      <!-- To add Logo just add here <span>{logoEmoj}</span> -->
+      OpenTravel
+    </h1>
+    <button class="theme-toggle" onclick="app.toggleTheme()">
+      <span id="themeIcon">🌙</span>
+      <span id="themeText">Dark</span>
+    </button>
+  </div>
+
+  <div class="main-layout">
+    <div class="sidebar">
+      <div class="sidebar-content">
+        <div class="controls-grid">
+          <div class="addr-group input-group">
+            <label>📍 Indirizzo</label>
+            <input id="addr" placeholder="Via, città...">
+          </div>
+          
+          <div class="mode-group input-group">
+            <label>🚗 Modalità</label>
+            <select id="mode">
+              <option value="driving">Auto</option>
+              <option value="walking">Piedi</option>
+            </select>
+          </div>
+
+          <div class="algo-group input-group">
+            <label>✨ Algoritmo</label>
+            <select id="algo">
+              <option value="nn">Nearest Neighbor</option>
+              <option value="twoopt">2-Opt</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="button-group">
+          <button class="primary" onclick="app.addByAddress()">➕ Aggiungi</button>
+          <button class="primary" onclick="app.calculate()">🔄 Calcola</button>
+        </div>
+
+        <button class="danger" onclick="app.reset()">🗑️ Reset tutto</button>
+
+        <div class="stops-list">
+          <div class="stops-header">
+            <label>📍 Tappe</label>
+            <span class="stops-count" id="stopCount">0</span>
+          </div>
+          <div class="stops-items" id="list"></div>
+        </div>
+
+        <div id="results"></div>
+      </div>
+    </div>
+
+    <div class="map-container">
+      <div id="map"></div>
+    </div>
+  </div>
+
+  <div id="elevationPanel" class="elevation-panel collapsed">
+    <div class="elevation-header" onclick="app.toggleElevationPanel()">
+      <h3>
+        <span>📈</span> Profilo altimetrico
+      </h3>
+      <button class="toggle-btn" id="elevationToggle">▲</button>
+    </div>
+    <div class="elevation-content" id="elevationContent">
+      <div id="elevationStats" class="elevation-stats"></div>
+      <canvas id="elevationChart"></canvas>
+    </div>
+  </div>
+
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-spinner">
+      <div class="spinner"></div>
+      <span>Calcolo percorso...</span>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+
+</html>

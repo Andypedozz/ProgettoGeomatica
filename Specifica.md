@@ -5,7 +5,6 @@ Realizzare un'applicazione web/mobile per il tracciamento di itinerari multi tap
 ## Requisiti principali
 
 Azione A: click sinistro del mouse / tocco sullo schermo
-Azione B: 
 
 * L'utente deve poter visualizzare una mappa OpenStreetMap.
 * L'utente deve poter inserire un insieme di tappe con A.
@@ -23,13 +22,3 @@ Azione B:
 
 ## Problema Algoritmico Da risolvere
 Il problema al centro dell'applicazione è il Traveling Salesman problem (TSP).
-
-## Struttura del progetto
-OpenTravel
-|__ /src
-    |
-    |__ /backend
-    |   |__ 
-    |
-    |__ /frontend
-        |__
