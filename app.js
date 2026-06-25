@@ -472,8 +472,9 @@ class RoutePlanner {
         if (!elevations || elevations.length === 0) return;
 
         // Calcola distanze progressive in km
+        const lastDist = elevations[elevations.length - 1]?.distance || 1;
         const distances = elevations.map(e =>
-            (e.distance * totalDistanceKm / 1000 / elevations[elevations.length - 1]?.distance || 1).toFixed(1)
+            (e.distance * totalDistanceKm / 1000 / lastDist).toFixed(1)
         );
         const heights = elevations.map(e => e.elevation);
 
@@ -712,6 +713,12 @@ class RoutePlanner {
     }
 }
 
-// Istanzia l'applicazione globale
-// L'oggetto 'app' è accessibile da onclick negli elementi HTML
-const app = new RoutePlanner();
+// Esportazione condizionale per test (Node.js)
+// Nel browser 'module' non è definito, quindi queste righe vengono ignorate
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { RoutePlanner };
+} else {
+    // Istanzia l'applicazione globale solo nel browser
+    // L'oggetto 'app' è accessibile da onclick negli elementi HTML
+    const app = new RoutePlanner();
+}

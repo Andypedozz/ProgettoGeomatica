@@ -1,7 +1,8 @@
 const express = require('express');
 const cors = require("cors");
 const path = require('path');
-const fetch = require('node-fetch');
+// Usa globalThis.fetch (Node 18+) o node-fetch per retrocompatibilità
+const fetch = globalThis.fetch || require('node-fetch');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -24,8 +25,10 @@ app.get('/', (req, res) => {
 const elevationCache = new Map();
 const requestTimestamps = [];
 
-// Rate limiting: max 10 richieste al secondo
+// Rate limiting: max 10 richieste al secondo (disabilitato nei test)
 function checkRateLimit() {
+    if (process.env.VITEST) return true;
+
     const now = Date.now();
     const windowStart = now - 1000;
 
@@ -46,11 +49,12 @@ function checkRateLimit() {
 app.get('/api/elevation', async (req, res) => {
     const { lat, lng } = req.query;
 
-    if (!lat || !lng) {
-        return res.status(400).json({ error: 'lat e lng sono richiesti' });
+    if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
+        return res.status(400).json({ error: 'lat e lng devono essere numeri validi' });
     }
 
-    const cacheKey = `${lat},${lng}`;
+    // Normalizza le coordinate per chiave cache consistente
+    const cacheKey = `${parseFloat(lat)},${parseFloat(lng)}`;
 
     // Controlla cache
     if (elevationCache.has(cacheKey)) {
@@ -84,7 +88,7 @@ app.get('/api/elevation', async (req, res) => {
 app.post('/api/elevation/batch', async (req, res) => {
     const { locations } = req.body;
 
-    if (!locations || !Array.isArray(locations)) {
+    if (!locations || !Array.isArray(locations) || locations.length === 0) {
         return res.status(400).json({ error: 'locations array è richiesto' });
     }
 
@@ -96,9 +100,9 @@ app.post('/api/elevation/batch', async (req, res) => {
     const results = [];
     const uncachedLocations = [];
 
-    // Controlla cache
+    // Controlla cache (con chiave normalizzata)
     for (const loc of locations) {
-        const cacheKey = `${loc.lat},${loc.lng}`;
+        const cacheKey = `${parseFloat(loc.lat)},${parseFloat(loc.lng)}`;
         if (elevationCache.has(cacheKey)) {
             results.push(elevationCache.get(cacheKey));
         } else {
@@ -156,10 +160,15 @@ app.use((req, res) => {
     res.status(404).json({ error: 'Route non trovata' });
 });
 
-// Avvia il server
-app.listen(PORT, () => {
-    console.log(`🚀 Server avviato su http://localhost:${PORT}`);
-    console.log(`📁 Servizio file statici dalla directory: ${__dirname}`);
-    console.log(`📍 Proxy elevation: http://localhost:${PORT}/api/elevation?lat=...&lng=...`);
-    console.log(`📊 Cache elevation: ${elevationCache.size} elementi`);
-});
+// Esporta l'app per i test
+module.exports = app;
+
+// Avvia il server solo se non siamo in ambiente di test
+if (!process.env.VITEST) {
+    app.listen(PORT, () => {
+        console.log(`🚀 Server avviato su http://localhost:${PORT}`);
+        console.log(`📁 Servizio file statici dalla directory: ${__dirname}`);
+        console.log(`📍 Proxy elevation: http://localhost:${PORT}/api/elevation?lat=...&lng=...`);
+        console.log(`📊 Cache elevation: ${elevationCache.size} elementi`);
+    });
+}
