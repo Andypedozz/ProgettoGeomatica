@@ -6,7 +6,7 @@
             name="viewport"
             content="width=device-width, initial-scale=1.0, viewport-fit=cover"
         />
-        <title>OpenTravel | Percorsi ottimali</title>
+        <title>OpenTravel · percorsi ottimali</title>
         <link
             rel="stylesheet"
             href="https://unpkg.com/leaflet/dist/leaflet.css"
@@ -31,21 +31,25 @@
                 </span>
                 OpenTravel
             </h1>
-            <button class="theme-toggle" onclick="app.toggleTheme()">
-                <span id="themeIcon">🌙</span>
-                <span id="themeText">Dark</span>
-            </button>
+            <div class="header-actions">
+                <button class="toggle-panel-btn" onclick="app.toggleSidebar()" title="Mostra/nascondi pannello">
+                    <span>📋</span> <span>Pannello</span>
+                </button>
+                <button class="theme-toggle" onclick="app.toggleTheme()">
+                    <span id="themeIcon">🌙</span>
+                    <span id="themeText">Dark</span>
+                </button>
+            </div>
         </div>
 
         <div class="main-layout">
-            <div class="sidebar">
+            <div class="sidebar" id="sidebar">
                 <div class="sidebar-content">
                     <div class="controls-grid">
                         <div class="addr-group input-group">
                             <label>📍 Indirizzo</label>
                             <input id="addr" placeholder="Via, città..." />
                         </div>
-
                         <div class="mode-group input-group">
                             <label>🚗 Modalità</label>
                             <select id="mode">
@@ -53,7 +57,6 @@
                                 <option value="walking">Piedi</option>
                             </select>
                         </div>
-
                         <div class="algo-group input-group">
                             <label>✨ Algoritmo</label>
                             <select id="algo">
@@ -64,17 +67,11 @@
                     </div>
 
                     <div class="button-group">
-                        <button class="primary" onclick="app.addByAddress()">
-                            ➕ Aggiungi
-                        </button>
-                        <button class="primary" onclick="app.calculate()">
-                            🔄 Calcola
-                        </button>
+                        <button class="primary" onclick="app.addByAddress()">➕ Aggiungi</button>
+                        <button class="primary" onclick="app.calculate()">🔄 Calcola</button>
                     </div>
 
-                    <button class="danger" onclick="app.reset()">
-                        🗑️ Reset tutto
-                    </button>
+                    <button class="danger" onclick="app.reset()">🗑️ Reset tutto</button>
 
                     <div class="stops-list">
                         <div class="stops-header">
@@ -90,10 +87,13 @@
 
             <div class="map-container">
                 <div id="map"></div>
-                <!-- Profilo altimetrico -->
+
                 <div id="elevationProfile" class="elevation-profile">
                     <div class="elevation-header">
-                        <span class="elevation-title">📈 Profilo altimetrico</span>
+                        <span class="elevation-title">
+                            📈 Profilo altimetrico
+                            <span class="resize-handle" id="elevResizeHandle" title="Trascina per ridimensionare (trascina in alto per ingrandire, in basso per ridurre)"></span>
+                        </span>
                         <span class="elevation-stats" id="elevationStats">—</span>
                     </div>
                     <div class="elevation-canvas-wrap" id="elevationCanvasWrap">
