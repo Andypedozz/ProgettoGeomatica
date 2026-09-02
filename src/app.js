@@ -4,7 +4,6 @@
  * - Mappa interattiva con Leaflet
  * - Gestione tappe (aggiunta, rimozione, modifica)
  * - Calcolo percorso ottimale con algoritmi TSP
- * - Profilo altimetrico con Chart.js
  * - Tema chiaro/scuro
  */
 class RoutePlanner {
@@ -34,12 +33,6 @@ class RoutePlanner {
 
         // Layer della route tracciata sulla mappa
         this.routeLayer = null;     // Layer del percorso disegnato
-
-        // Riferimento al grafico altimetrico Chart.js
-        this.elevationChart = null;
-
-        // Stato del pannello altimetrico (collassato/espanso)
-        this.panelCollapsed = true;
 
         // Tema corrente (false = light, true = dark)
         this.isDark = false;
@@ -99,24 +92,6 @@ class RoutePlanner {
     }
 
     /**
-     * Espande/collassa il pannello del profilo altimetrico
-     * Applica trasformazione CSS translateY
-     */
-    toggleElevationPanel() {
-        this.panelCollapsed = !this.panelCollapsed;
-        const panel = document.getElementById('elevationPanel');
-        const btn = document.getElementById('elevationToggle');
-
-        if (this.panelCollapsed) {
-            panel.classList.add('collapsed');  // Nasconde il pannello (mostra solo header)
-            btn.textContent = '▲';             // Freccia su = espandi
-        } else {
-            panel.classList.remove('collapsed'); // Mostra il pannello completo
-            btn.textContent = '▼';               // Freccia giù = collassa
-        }
-    }
-
-    /**
      * Genera un ID univoco per ogni tappa
      * @returns {string} ID randomico
      */
@@ -151,7 +126,6 @@ class RoutePlanner {
             this.updateList();           // Aggiorna lista UI
             this.clearRoute();           // Cancella percorso disegnato
             document.getElementById('results').innerHTML = ''; // Pulisce risultati
-            this.collapseElevation();    // Collassa profilo altimetrico
         });
 
         // Salva riferimento marker
@@ -161,7 +135,6 @@ class RoutePlanner {
         this.updateList();           // Ricostruisce lista tappe
         this.clearRoute();           // Cancella vecchio percorso
         document.getElementById('results').innerHTML = ''; // Pulisce risultati
-        this.collapseElevation();    // Collassa profilo altimetrico
     }
 
     /**
@@ -183,7 +156,6 @@ class RoutePlanner {
         this.updateList();
         this.clearRoute();           // Cancella percorso
         document.getElementById('results').innerHTML = '';
-        this.collapseElevation();    // Collassa profilo
     }
 
     /**
@@ -394,148 +366,6 @@ class RoutePlanner {
     }
 
     /**
-     * Recupera il profilo altimetrico di un percorso
-     * @param {Array} coordinates - Array di coordinate [lng, lat]
-     * @returns {Promise<Array>} Array di punti {distance, elevation}
-     */
-    async getElevationProfile(coordinates) {
-        const elevations = [];
-        // Campiona meno punti per ridurre chiamate API
-        const step = Math.max(1, Math.floor(coordinates.length / 30));
-
-        // Raccogli le coordinate da richiedere in batch
-        const locations = [];
-        const indices = [];
-
-        for (let i = 0; i < coordinates.length; i += step) {
-            const coord = coordinates[i];
-            locations.push({ lat: coord[1], lng: coord[0] });
-            indices.push(i);
-        }
-
-        // Dividi in batch da 20 coordinate
-        const batchSize = 20;
-        const batches = [];
-
-        for (let i = 0; i < locations.length; i += batchSize) {
-            batches.push({
-                locations: locations.slice(i, i + batchSize),
-                indices: indices.slice(i, i + batchSize)
-            });
-        }
-
-        // Processa i batch
-        for (const batch of batches) {
-            try {
-                const response = await fetch('/api/elevation/batch', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ locations: batch.locations })
-                });
-
-                if (!response.ok) {
-                    console.warn(`Errore batch: ${response.status}`);
-                    continue;
-                }
-
-                const data = await response.json();
-
-                if (data.results) {
-                    data.results.forEach((result, idx) => {
-                        if (result.results && result.results[0]) {
-                            elevations.push({
-                                distance: batch.indices[idx],
-                                elevation: result.results[0].elevation
-                            });
-                        }
-                    });
-                }
-            } catch (e) {
-                console.warn('Errore altitudine batch:', e);
-            }
-
-            // Pausa tra batch per evitare rate limiting
-            await new Promise(r => setTimeout(r, 500));
-        }
-
-        return elevations;
-    }
-
-    /**
-     * Visualizza il profilo altimetrico con Chart.js
-     * @param {Array} elevations - Dati altimetrici {distance, elevation}
-     * @param {number} totalDistanceKm - Distanza totale in metri
-     */
-    displayElevationProfile(elevations, totalDistanceKm) {
-        if (!elevations || elevations.length === 0) return;
-
-        // Calcola distanze progressive in km
-        const lastDist = elevations[elevations.length - 1]?.distance || 1;
-        const distances = elevations.map(e =>
-            (e.distance * totalDistanceKm / 1000 / lastDist).toFixed(1)
-        );
-        const heights = elevations.map(e => e.elevation);
-
-        // Statistiche altimetriche
-        const minElev = Math.min(...heights);
-        const maxElev = Math.max(...heights);
-        let totalAscent = 0, totalDescent = 0;
-
-        // Calcola salita e discesa totale
-        for (let i = 1; i < heights.length; i++) {
-            if (heights[i] > heights[i - 1])
-                totalAscent += heights[i] - heights[i - 1];
-            else if (heights[i] < heights[i - 1])
-                totalDescent += heights[i - 1] - heights[i];
-        }
-
-        // Aggiorna HTML statistiche
-        document.getElementById("elevationStats").innerHTML = `
-          <div class="elevation-stat"><div class="value">${Math.round(minElev)}m</div><div class="label">Min</div></div>
-          <div class="elevation-stat"><div class="value">${Math.round(maxElev)}m</div><div class="label">Max</div></div>
-          <div class="elevation-stat"><div class="value">${Math.round(totalAscent)}m</div><div class="label">Salita</div></div>
-          <div class="elevation-stat"><div class="value">${Math.round(totalDescent)}m</div><div class="label">Discesa</div></div>
-          <div class="elevation-stat"><div class="value">${(maxElev - minElev).toFixed(0)}m</div><div class="label">Dislivello</div></div>
-        `;
-
-        // Distrugge grafico esistente se presente
-        if (this.elevationChart) this.elevationChart.destroy();
-
-        // Crea nuovo grafico Chart.js
-        const ctx = document.getElementById('elevationChart').getContext('2d');
-        this.elevationChart = new Chart(ctx, {
-            type: 'line',                    // Grafico a linee
-            data: {
-                labels: distances,           // Asse X: distanze
-                datasets: [{
-                    label: 'Altitudine (m)',
-                    data: heights,           // Asse Y: altitudini
-                    borderColor: '#22c55e',  // Linea verde
-                    backgroundColor: 'rgba(34,197,94,0.1)', // Riempimento trasparente
-                    borderWidth: 3,
-                    fill: true,
-                    tension: 0.3,            // Smoothing della curva
-                    pointRadius: 0           // Nasconde i punti singoli
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: {
-                    tooltip: { callbacks: { label: (ctx) => `${ctx.raw} m slm` } },
-                    legend: { display: false } // Nasconde legenda
-                },
-                scales: {
-                    x: { title: { display: true, text: 'Distanza (km)', font: { size: 10 } } },
-                    y: { title: { display: true, text: 'Altitudine (m)', font: { size: 10 } }, beginAtZero: false }
-                }
-            }
-        });
-    }
-
-    /**
      * Disegna il percorso sulla mappa e mostra statistiche
      * @param {number[]} path - Ordine ottimale delle tappe
      * @param {string} mode - Modalità di trasporto
@@ -575,13 +405,6 @@ class RoutePlanner {
             <div class="stat-row"><span class="stat-label">✨ Algoritmo</span><span class="stat-value">${document.getElementById("algo").options[document.getElementById("algo").selectedIndex].text}</span></div>
           </div>
         `;
-
-        // Recupera e mostra profilo altimetrico
-        const elevations = await this.getElevationProfile(route.geometry.coordinates);
-        this.displayElevationProfile(elevations, route.distance);
-
-        // Espandi automaticamente pannello altimetrico
-        if (this.panelCollapsed) this.toggleElevationPanel();
     }
 
     /**
@@ -617,7 +440,7 @@ class RoutePlanner {
 
             // Aggiunge marker alla mappa
             const m = L.marker([p.lat, p.lng], { icon }).addTo(this.map);
-            m.bindPopup(`Tappa ${idx + 1}${idx === 0 ? ' (Partenza)' : idx === path.length - 1 ? ' (Arrivo)' : ''}`);
+            m.bindPopup(`Tappa ${idx + 1}${idx === 0 ? ' (Partenza)' : idx === path.length-1 ? ' (Arrivo)' : ''}`);
             m.on('click', () => this.removePoint(p.id)); // Click per rimuovere
 
             this.markers.push({ id: p.id, marker: m });
@@ -630,13 +453,6 @@ class RoutePlanner {
     clearRoute() {
         if (this.routeLayer) this.map.removeLayer(this.routeLayer);
         this.routeLayer = null;
-    }
-
-    /**
-     * Collassa il pannello altimetrico se espanso
-     */
-    collapseElevation() {
-        if (!this.panelCollapsed) this.toggleElevationPanel();
     }
 
     /**
@@ -700,25 +516,9 @@ class RoutePlanner {
         // Aggiorna UI
         this.updateList();
         document.getElementById("results").innerHTML = "";
-        this.collapseElevation();
-
-        // Distrugge grafico altimetrico
-        if (this.elevationChart) {
-            this.elevationChart.destroy();
-            this.elevationChart = null;
-        }
-
-        // Pulisce statistiche
-        document.getElementById("elevationStats").innerHTML = "";
     }
 }
 
-// Esportazione condizionale per test (Node.js)
-// Nel browser 'module' non è definito, quindi queste righe vengono ignorate
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { RoutePlanner };
-} else {
-    // Istanzia l'applicazione globale solo nel browser
-    // L'oggetto 'app' è accessibile da onclick negli elementi HTML
-    const app = new RoutePlanner();
-}
+// Istanzia l'applicazione globale
+// L'oggetto 'app' è accessibile da onclick negli elementi HTML
+const app = new RoutePlanner();
