@@ -1,0 +1,1458 @@
+<!doctype html>
+<html lang="it">
+    <head>
+        <meta charset="UTF-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+        />
+        <title>OpenTravel · percorsi ottimali</title>
+        <link
+            rel="stylesheet"
+            href="https://unpkg.com/leaflet/dist/leaflet.css"
+        />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap"
+            rel="stylesheet"
+        />
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+
+            :root {
+                --paper: #eef1e3;
+                --surface: #ffffff;
+                --surface-alt: #f6f7ef;
+                --ink: #1e2a1e;
+                --ink-soft: #52604e;
+                --pine: #2f5233;
+                --pine-dark: #203a24;
+                --moss: #7c9a70;
+                --trail: #c1562f;
+                --trail-dark: #a1451f;
+                --gold: #b28a44;
+                --line: #d7dcc7;
+                --line-strong: #c3caae;
+                --shadow: 0 2px 8px rgba(30, 42, 30, 0.06);
+                --shadow-lg: 0 20px 40px -12px rgba(30, 42, 30, 0.25);
+                --header-bg: linear-gradient(150deg, #26421f 0%, #16260f 100%);
+                --header-height: 64px;
+                --sidebar-width-desktop: 400px;
+                --font-display: "Space Grotesk", system-ui, sans-serif;
+                --font-body: "Public Sans", system-ui, -apple-system, sans-serif;
+                --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+                --elevation-height: 120px;
+                --radius: 16px;
+                --transition: 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            }
+
+            body.dark {
+                --paper: #0d130e;
+                --surface: #161d16;
+                --surface-alt: #1b231b;
+                --ink: #e7ecdd;
+                --ink-soft: #9db095;
+                --pine: #6fae74;
+                --pine-dark: #4c8a52;
+                --moss: #4c6b49;
+                --trail: #e2803f;
+                --trail-dark: #c96a30;
+                --gold: #d8b25f;
+                --line: #263226;
+                --line-strong: #34432f;
+                --header-bg: linear-gradient(150deg, #0f1a0f 0%, #060a06 100%);
+                --shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+                --shadow-lg: 0 20px 40px -12px rgba(0, 0, 0, 0.7);
+            }
+
+            html {
+                -webkit-tap-highlight-color: transparent;
+            }
+
+            body {
+                font-family: var(--font-body);
+                background-color: var(--paper);
+                color: var(--ink);
+                transition: background-color 0.4s ease, color 0.4s ease;
+                background-image: radial-gradient(var(--line-strong) 1px, transparent 1px);
+                background-size: 24px 24px;
+            }
+
+            ::selection {
+                background: var(--trail);
+                color: #fff;
+            }
+
+            :focus-visible {
+                outline: 2px solid var(--trail);
+                outline-offset: 2px;
+            }
+
+            /* ---------- HEADER ---------- */
+            .header {
+                background: var(--header-bg);
+                color: #f4f6ee;
+                padding: 0 20px;
+                height: var(--header-height);
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                box-shadow: var(--shadow-lg);
+                position: relative;
+                z-index: 20;
+                border-bottom: 1px solid rgba(216, 178, 95, 0.3);
+                backdrop-filter: blur(4px);
+            }
+
+            .header h1 {
+                font-family: var(--font-display);
+                font-size: 1.2rem;
+                font-weight: 700;
+                letter-spacing: -0.01em;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                white-space: nowrap;
+            }
+
+            .brand-mark {
+                width: 26px;
+                height: 26px;
+                flex-shrink: 0;
+                color: var(--gold);
+            }
+            .brand-mark svg {
+                width: 100%;
+                height: 100%;
+                display: block;
+            }
+
+            .header-actions {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }
+
+            .theme-toggle {
+                background: rgba(244, 246, 238, 0.07);
+                border: 1px solid rgba(216, 178, 95, 0.4);
+                padding: 7px 14px;
+                border-radius: 40px;
+                color: #f4f6ee;
+                cursor: pointer;
+                font-family: var(--font-body);
+                font-size: 13px;
+                font-weight: 600;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                transition: all 0.25s ease;
+            }
+            .theme-toggle:hover {
+                background: rgba(216, 178, 95, 0.18);
+                border-color: var(--gold);
+                transform: translateY(-2px);
+                box-shadow: 0 6px 14px rgba(0, 0, 0, 0.2);
+            }
+
+            .toggle-panel-btn {
+                background: rgba(244, 246, 238, 0.07);
+                border: 1px solid rgba(216, 178, 95, 0.3);
+                padding: 7px 14px;
+                border-radius: 40px;
+                color: #f4f6ee;
+                cursor: pointer;
+                font-family: var(--font-body);
+                font-size: 13px;
+                font-weight: 600;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                transition: all 0.25s ease;
+            }
+            .toggle-panel-btn:hover {
+                background: rgba(216, 178, 95, 0.15);
+                border-color: var(--gold);
+                transform: translateY(-2px);
+            }
+
+            /* ---------- LAYOUT ---------- */
+            .main-layout {
+                display: flex;
+                flex-direction: column;
+                height: calc(100vh - var(--header-height));
+                height: calc(100dvh - var(--header-height));
+                min-height: 0;
+                position: relative;
+            }
+
+            .sidebar {
+                background: var(--surface);
+                border-bottom: 1px solid var(--line-strong);
+                transition: background 0.4s ease, border-color 0.4s ease, max-height 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.4s ease;
+                width: 100%;
+                max-height: 50vh;
+                overflow-y: auto;
+                overscroll-behavior: contain;
+                flex-shrink: 0;
+                position: relative;
+                z-index: 5;
+                box-shadow: var(--shadow);
+            }
+            .sidebar.collapsed {
+                max-height: 0 !important;
+                opacity: 0;
+                overflow: hidden;
+                padding: 0;
+                border-bottom: none;
+                pointer-events: none;
+            }
+
+            .sidebar-content {
+                padding: 16px 16px 12px;
+            }
+
+            .controls-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 10px;
+                margin-bottom: 12px;
+            }
+            .addr-group {
+                grid-column: 1 / -1;
+            }
+            .mode-group,
+            .algo-group {
+                min-width: 0;
+            }
+
+            .button-group {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 10px;
+                margin-bottom: 14px;
+            }
+
+            /* ---------- MAP ---------- */
+            .map-container {
+                flex: 1;
+                position: relative;
+                min-height: 200px;
+                display: flex;
+                flex-direction: column;
+                min-width: 0;
+                transition: flex 0.4s ease;
+            }
+
+            #map {
+                flex: 1;
+                width: 100%;
+                min-height: 0;
+                filter: saturate(0.92);
+                transition: filter 0.4s ease;
+            }
+            body.dark #map {
+                filter: saturate(0.85) brightness(0.92) invert(1) hue-rotate(180deg);
+            }
+
+            /* ---------- ELEVATION PROFILE ---------- */
+            .elevation-profile {
+                display: flex;
+                flex-direction: column;
+                background: var(--surface);
+                border-top: 1.5px solid var(--line-strong);
+                padding: 8px 16px 6px 16px;
+                transition: background 0.4s ease, border-color 0.4s ease, height 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.3s ease, padding 0.3s ease;
+                flex-shrink: 0;
+                height: var(--elevation-height);
+                overflow: hidden;
+                position: relative;
+                min-height: 60px;
+                max-height: 300px;
+            }
+            .elevation-profile.collapsed {
+                height: 0 !important;
+                padding: 0 16px !important;
+                opacity: 0;
+                border-top: none;
+                pointer-events: none;
+                min-height: 0;
+                max-height: 0;
+            }
+
+            .elevation-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 4px;
+                flex-shrink: 0;
+            }
+            .elevation-title {
+                font-size: 10px;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+                color: var(--gold);
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            .elevation-title .resize-handle {
+                cursor: ns-resize;
+                background: var(--line-strong);
+                width: 48px;
+                height: 5px;
+                border-radius: 6px;
+                display: inline-block;
+                transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
+                position: relative;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            }
+            .elevation-title .resize-handle::after {
+                content: '⇅';
+                position: absolute;
+                left: 50%;
+                top: 50%;
+                transform: translate(-50%, -50%);
+                font-size: 10px;
+                color: var(--ink-soft);
+                opacity: 0.5;
+                transition: opacity 0.2s;
+                line-height: 1;
+            }
+            .elevation-title .resize-handle:hover {
+                background: var(--trail);
+                transform: scaleY(1.3);
+                box-shadow: 0 2px 8px rgba(193, 86, 47, 0.3);
+            }
+            .elevation-title .resize-handle:hover::after {
+                opacity: 0.9;
+                color: #fff;
+            }
+            .elevation-title .resize-handle:active {
+                transform: scaleY(1.6);
+                background: var(--trail-dark);
+            }
+
+            .elevation-stats {
+                font-size: 10px;
+                font-family: var(--font-mono);
+                color: var(--ink-soft);
+                background: var(--surface-alt);
+                padding: 2px 10px;
+                border-radius: 20px;
+            }
+
+            .elevation-canvas-wrap {
+                flex: 1;
+                min-height: 0;
+                position: relative;
+            }
+            #elevationCanvas {
+                width: 100%;
+                height: 100%;
+                display: block;
+                border-radius: 8px;
+            }
+            .elevation-labels {
+                display: flex;
+                justify-content: space-between;
+                font-size: 8px;
+                font-family: var(--font-mono);
+                color: var(--ink-soft);
+                margin-top: 2px;
+                flex-shrink: 0;
+            }
+
+            /* ---------- FORM ELEMENTS ---------- */
+            .input-group {
+                margin-bottom: 0;
+            }
+            label {
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                font-size: 0.7rem;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+                color: var(--gold);
+                margin-bottom: 5px;
+            }
+            input,
+            select {
+                width: 100%;
+                padding: 10px 12px;
+                border: 1.5px solid var(--line-strong);
+                border-radius: var(--radius);
+                background: var(--surface-alt);
+                color: var(--ink);
+                font-family: var(--font-body);
+                font-size: 13px;
+                font-weight: 500;
+                transition: all 0.25s ease;
+            }
+            input:focus,
+            select:focus {
+                outline: none;
+                border-color: var(--trail);
+                box-shadow: 0 0 0 4px rgba(193, 86, 47, 0.12);
+                transform: translateY(-1px);
+            }
+
+            /* ---------- BUTTONS ---------- */
+            button {
+                width: 100%;
+                padding: 10px 12px;
+                border: none;
+                border-radius: var(--radius);
+                cursor: pointer;
+                font-family: var(--font-display);
+                font-weight: 600;
+                font-size: 13px;
+                letter-spacing: 0.01em;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+                transition: all 0.25s ease;
+                position: relative;
+                overflow: hidden;
+            }
+            button::after {
+                content: '';
+                position: absolute;
+                inset: 0;
+                background: radial-gradient(circle at center, rgba(255, 255, 255, 0.15) 0%, transparent 70%);
+                opacity: 0;
+                transition: opacity 0.3s;
+            }
+            button:hover::after {
+                opacity: 1;
+            }
+            button:active {
+                transform: scale(0.97);
+            }
+
+            button.primary {
+                background: var(--pine);
+                color: #f4f6ee;
+                box-shadow: var(--shadow);
+                border: 1.5px solid var(--pine-dark);
+            }
+            button.primary:hover {
+                background: var(--pine-dark);
+                transform: translateY(-2px);
+                box-shadow: var(--shadow-lg);
+            }
+
+            button.danger {
+                background: transparent;
+                color: var(--trail);
+                border: 1.5px solid var(--trail);
+            }
+            button.danger:hover {
+                background: var(--trail);
+                color: #fff8f2;
+                transform: translateY(-2px);
+                box-shadow: var(--shadow-lg);
+            }
+
+            button.secondary {
+                background: var(--surface-alt);
+                border: 1.5px solid var(--moss);
+                color: var(--pine);
+            }
+            button.secondary:hover {
+                background: var(--line);
+                transform: translateY(-2px);
+            }
+
+            /* ---------- STOPS ---------- */
+            .stops-list {
+                margin: 14px 0 10px;
+            }
+            .stops-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 10px;
+            }
+            .stops-header label {
+                margin-bottom: 0;
+            }
+            .stops-count {
+                font-family: var(--font-mono);
+                font-size: 12px;
+                color: #fff;
+                font-weight: 600;
+                background: var(--trail);
+                padding: 2px 12px;
+                border-radius: 30px;
+                transition: background 0.3s;
+            }
+
+            .stops-items {
+                max-height: 150px;
+                overflow-y: auto;
+                position: relative;
+                padding-left: 4px;
+            }
+            .stops-items::before {
+                content: '';
+                position: absolute;
+                top: 18px;
+                bottom: 18px;
+                left: 18px;
+                width: 0;
+                border-left: 2.5px dashed var(--moss);
+                z-index: 0;
+            }
+
+            .stop-item {
+                position: relative;
+                background: var(--surface-alt);
+                border-radius: 12px;
+                padding: 10px 12px;
+                margin-bottom: 8px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                cursor: pointer;
+                transition: all 0.25s ease;
+                border: 1px solid var(--line-strong);
+                z-index: 1;
+                animation: fadeSlide 0.3s ease;
+            }
+            .stop-item:hover {
+                border-color: var(--trail);
+                transform: translateX(5px) scale(1.01);
+                box-shadow: var(--shadow);
+            }
+
+            @keyframes fadeSlide {
+                0% {
+                    opacity: 0;
+                    transform: translateY(-8px);
+                }
+                100% {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+
+            .stop-number {
+                width: 30px;
+                height: 30px;
+                background: var(--trail);
+                clip-path: polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-family: var(--font-mono);
+                font-size: 13px;
+                font-weight: 700;
+                color: #fff8f2;
+                flex-shrink: 0;
+                box-shadow: var(--shadow);
+                z-index: 1;
+                transition: transform 0.2s;
+            }
+            .stop-item:hover .stop-number {
+                transform: rotate(4deg) scale(1.05);
+            }
+
+            .stop-info {
+                flex: 1;
+                margin-left: 12px;
+            }
+            .stop-title {
+                font-size: 13px;
+                font-weight: 600;
+                color: var(--ink);
+            }
+            .stop-coords {
+                font-size: 10px;
+                color: var(--ink-soft);
+                font-family: var(--font-mono);
+                margin-top: 2px;
+                letter-spacing: 0.02em;
+            }
+
+            .delete-stop {
+                background: none;
+                border: none;
+                color: var(--ink-soft);
+                cursor: pointer;
+                width: auto;
+                padding: 6px 8px;
+                font-size: 16px;
+                transition: all 0.2s ease;
+                border-radius: 8px;
+            }
+            .delete-stop:hover {
+                background: rgba(193, 86, 47, 0.12);
+                color: var(--trail);
+                transform: scale(1.15) rotate(4deg);
+            }
+
+            /* ---------- RESULTS ---------- */
+            .results-card {
+                background: var(--surface-alt);
+                border-radius: var(--radius);
+                padding: 14px 16px;
+                margin-top: 12px;
+                border: 1.5px solid var(--gold);
+                box-shadow: var(--shadow);
+                animation: fadeSlide 0.4s ease;
+            }
+            .stat-row {
+                display: flex;
+                justify-content: space-between;
+                align-items: baseline;
+                padding: 6px 0;
+                font-size: 13px;
+                border-bottom: 1px solid var(--line);
+            }
+            .stat-row:last-child {
+                border-bottom: none;
+            }
+            .stat-label {
+                color: var(--ink-soft);
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                font-size: 10.5px;
+            }
+            .stat-value {
+                font-family: var(--font-mono);
+                font-weight: 600;
+                color: var(--pine);
+                font-size: 14px;
+            }
+            body.dark .stat-value {
+                color: var(--trail);
+            }
+
+            /* ---------- LOADING ---------- */
+            .loading-overlay {
+                position: fixed;
+                top: var(--header-height);
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(14, 20, 14, 0.6);
+                backdrop-filter: blur(6px);
+                display: none;
+                justify-content: center;
+                align-items: center;
+                z-index: 2000;
+                animation: fadeIn 0.3s ease;
+            }
+            @keyframes fadeIn {
+                0% {
+                    opacity: 0;
+                }
+                100% {
+                    opacity: 1;
+                }
+            }
+
+            .loading-spinner {
+                background: var(--surface);
+                padding: 20px 32px;
+                border-radius: var(--radius);
+                display: flex;
+                gap: 14px;
+                align-items: center;
+                box-shadow: var(--shadow-lg);
+                font-weight: 600;
+                color: var(--ink);
+                border: 1.5px solid var(--gold);
+                animation: pulse 1.6s ease-in-out infinite;
+            }
+            @keyframes pulse {
+                0%,
+                100% {
+                    transform: scale(1);
+                }
+                50% {
+                    transform: scale(1.02);
+                }
+            }
+            .spinner {
+                width: 22px;
+                height: 22px;
+                border: 3px solid var(--line);
+                border-top-color: var(--trail);
+                border-radius: 50%;
+                animation: spin 0.8s linear infinite;
+            }
+            @keyframes spin {
+                to {
+                    transform: rotate(360deg);
+                }
+            }
+
+            /* ---------- SCROLLBAR ---------- */
+            ::-webkit-scrollbar {
+                width: 5px;
+                height: 5px;
+            }
+            ::-webkit-scrollbar-track {
+                background: var(--paper);
+            }
+            ::-webkit-scrollbar-thumb {
+                background: var(--moss);
+                border-radius: 10px;
+            }
+            ::-webkit-scrollbar-thumb:hover {
+                background: var(--trail);
+            }
+
+            /* ---------- RESPONSIVE ---------- */
+            @media (max-width: 767px) {
+                .header h1 {
+                    font-size: 1rem;
+                }
+                .header-actions .toggle-panel-btn span {
+                    display: none;
+                }
+                .sidebar {
+                    max-height: 45vh;
+                }
+                .controls-grid {
+                    gap: 8px;
+                }
+                .elevation-profile {
+                    height: 90px;
+                    padding: 6px 12px 4px;
+                }
+                .elevation-title {
+                    font-size: 8px;
+                }
+                .elevation-stats {
+                    font-size: 8px;
+                    padding: 1px 8px;
+                }
+                :root {
+                    --elevation-height: 90px;
+                }
+                .elevation-title .resize-handle {
+                    width: 36px;
+                    height: 4px;
+                }
+                .elevation-title .resize-handle::after {
+                    font-size: 8px;
+                }
+            }
+
+            @media (min-width: 768px) {
+                .header {
+                    padding: 0 32px;
+                    height: 68px;
+                }
+                .header h1 {
+                    font-size: 1.4rem;
+                    gap: 12px;
+                }
+                .brand-mark {
+                    width: 30px;
+                    height: 30px;
+                }
+                .main-layout {
+                    flex-direction: row;
+                }
+                .sidebar {
+                    width: var(--sidebar-width-desktop);
+                    border-right: 1.5px solid var(--line-strong);
+                    border-bottom: none;
+                    max-height: none !important;
+                    opacity: 1 !important;
+                    pointer-events: auto !important;
+                }
+                .sidebar.collapsed {
+                    max-height: none !important;
+                    opacity: 1 !important;
+                    pointer-events: auto !important;
+                    width: 0 !important;
+                    padding: 0 !important;
+                    overflow: hidden;
+                    border-right: none;
+                }
+                .sidebar-content {
+                    padding: 24px 24px 16px;
+                }
+                .controls-grid {
+                    display: block;
+                }
+                .addr-group,
+                .mode-group,
+                .algo-group {
+                    margin-bottom: 16px;
+                }
+                .button-group {
+                    display: flex;
+                    gap: 12px;
+                    margin-bottom: 18px;
+                }
+                .map-container {
+                    flex: 1;
+                }
+                label {
+                    font-size: 0.75rem;
+                    margin-bottom: 6px;
+                }
+                input,
+                select {
+                    padding: 12px 14px;
+                    font-size: 14px;
+                }
+                button {
+                    padding: 12px 18px;
+                    font-size: 14px;
+                }
+                .stops-items {
+                    max-height: 320px;
+                }
+                .stop-item {
+                    padding: 12px 16px;
+                }
+                .results-card {
+                    padding: 18px 20px;
+                }
+                .stat-row {
+                    padding: 8px 0;
+                    font-size: 14px;
+                }
+                .elevation-profile {
+                    height: 120px;
+                    padding: 10px 20px 8px;
+                }
+                .elevation-title {
+                    font-size: 11px;
+                }
+                .elevation-stats {
+                    font-size: 11px;
+                }
+                :root {
+                    --elevation-height: 120px;
+                }
+                .elevation-title .resize-handle {
+                    width: 52px;
+                    height: 6px;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>
+                <span class="brand-mark" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.6" />
+                        <path d="M15.5 8.5L13 13L8.5 15.5L11 11L15.5 8.5Z" fill="currentColor" />
+                        <circle cx="12" cy="12" r="1.4" fill="currentColor" />
+                    </svg>
+                </span>
+                OpenTravel
+            </h1>
+            <div class="header-actions">
+                <button class="toggle-panel-btn" onclick="app.toggleSidebar()" title="Mostra/nascondi pannello">
+                    <span>📋</span> <span>Pannello</span>
+                </button>
+                <button class="theme-toggle" onclick="app.toggleTheme()">
+                    <span id="themeIcon">🌙</span>
+                    <span id="themeText">Dark</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="main-layout">
+            <div class="sidebar" id="sidebar">
+                <div class="sidebar-content">
+                    <div class="controls-grid">
+                        <div class="addr-group input-group">
+                            <label>📍 Indirizzo</label>
+                            <input id="addr" placeholder="Via, città..." />
+                        </div>
+                        <div class="mode-group input-group">
+                            <label>🚗 Modalità</label>
+                            <select id="mode">
+                                <option value="driving">Auto</option>
+                                <option value="walking">Piedi</option>
+                            </select>
+                        </div>
+                        <div class="algo-group input-group">
+                            <label>✨ Algoritmo</label>
+                            <select id="algo">
+                                <option value="nn">Nearest Neighbor</option>
+                                <option value="twoopt">2-Opt</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="button-group">
+                        <button class="primary" onclick="app.addByAddress()">➕ Aggiungi</button>
+                        <button class="primary" onclick="app.calculate()">🔄 Calcola</button>
+                    </div>
+
+                    <button class="danger" onclick="app.reset()">🗑️ Reset tutto</button>
+
+                    <div class="stops-list">
+                        <div class="stops-header">
+                            <label>📍 Tappe</label>
+                            <span class="stops-count" id="stopCount">0</span>
+                        </div>
+                        <div class="stops-items" id="list"></div>
+                    </div>
+
+                    <div id="results"></div>
+                </div>
+            </div>
+
+            <div class="map-container">
+                <div id="map"></div>
+
+                <div id="elevationProfile" class="elevation-profile">
+                    <div class="elevation-header">
+                        <span class="elevation-title">
+                            📈 Profilo altimetrico
+                            <span class="resize-handle" id="elevResizeHandle" title="Trascina per ridimensionare (trascina in alto per ingrandire, in basso per ridurre)"></span>
+                        </span>
+                        <span class="elevation-stats" id="elevationStats">—</span>
+                    </div>
+                    <div class="elevation-canvas-wrap" id="elevationCanvasWrap">
+                        <canvas id="elevationCanvas"></canvas>
+                    </div>
+                    <div class="elevation-labels">
+                        <span id="elevMin">—</span>
+                        <span id="elevMax">—</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="loadingOverlay" class="loading-overlay">
+            <div class="loading-spinner">
+                <div class="spinner"></div>
+                <span>Calcolo percorso...</span>
+            </div>
+        </div>
+
+        <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+        <script>
+            class RoutePlanner {
+                constructor() {
+                    this.map = L.map("map").setView([43.7, 12.6], 6);
+                    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                        attribution: "© OpenStreetMap contributors",
+                        maxZoom: 19,
+                    }).addTo(this.map);
+
+                    this.points = [];
+                    this.markers = [];
+                    this.matrix = null;
+                    this.cache = new Map();
+                    this.lastNominatim = 0;
+                    this.routeLayer = null;
+                    this.isDark = false;
+                    document.body.classList.remove("dark");
+
+                    this.map.on("click", (e) => this.addPoint(e.latlng.lat, e.latlng.lng));
+
+                    this.updateThemeUI();
+
+                    this.canvas = document.getElementById("elevationCanvas");
+                    this.ctx = this.canvas.getContext("2d");
+                    this.elevationWrap = document.getElementById("elevationCanvasWrap");
+                    this.elevationData = null;
+
+                    this.resizeRAF = null;
+                    const mapContainer = document.querySelector(".map-container");
+                    this.mapResizeObserver = new ResizeObserver(() => this.scheduleMapResize());
+                    this.mapResizeObserver.observe(mapContainer);
+
+                    this.elevationResizeObserver = new ResizeObserver(() => {
+                        if (this.elevationData) this.drawElevationProfile(this.elevationData);
+                    });
+                    this.elevationResizeObserver.observe(this.elevationWrap);
+
+                    // ——— Elevation resize via drag (verso invertito) ———
+                    const handle = document.getElementById("elevResizeHandle");
+                    let isDragging = false;
+                    let startY = 0;
+                    let startHeight = 0;
+
+                    const onDrag = (e) => {
+                        if (!isDragging) return;
+                        const clientY = e.clientY || e.touches?.[0]?.clientY || 0;
+                        // Invertito: se il mouse va in alto (clientY decresce), il pannello cresce
+                        const delta = startY - clientY;
+                        let newH = Math.max(60, Math.min(300, startHeight + delta));
+                        document.querySelector(".elevation-profile").style.height = newH + "px";
+                        document.documentElement.style.setProperty("--elevation-height", newH + "px");
+                        if (this.elevationData) this.drawElevationProfile(this.elevationData);
+                        this.scheduleMapResize();
+                    };
+
+                    handle.addEventListener("mousedown", (e) => {
+                        isDragging = true;
+                        startY = e.clientY;
+                        startHeight = document.querySelector(".elevation-profile").offsetHeight;
+                        document.addEventListener("mousemove", onDrag);
+                        document.addEventListener("mouseup", () => {
+                            isDragging = false;
+                            document.removeEventListener("mousemove", onDrag);
+                        });
+                        e.preventDefault();
+                    });
+
+                    handle.addEventListener("touchstart", (e) => {
+                        const touch = e.touches[0];
+                        isDragging = true;
+                        startY = touch.clientY;
+                        startHeight = document.querySelector(".elevation-profile").offsetHeight;
+                        document.addEventListener("touchmove", onDrag);
+                        document.addEventListener("touchend", () => {
+                            isDragging = false;
+                            document.removeEventListener("touchmove", onDrag);
+                        });
+                        e.preventDefault();
+                    }, { passive: false });
+
+                    // ——— toggle elevation (doppio click sul titolo) ———
+                    document.querySelector(".elevation-title").addEventListener("dblclick", () => {
+                        this.toggleElevation();
+                    });
+                }
+
+                scheduleMapResize() {
+                    if (this.resizeRAF) cancelAnimationFrame(this.resizeRAF);
+                    this.resizeRAF = requestAnimationFrame(() => {
+                        this.map.invalidateSize();
+                    });
+                }
+
+                showLoading() {
+                    document.getElementById("loadingOverlay").style.display = "flex";
+                }
+                hideLoading() {
+                    document.getElementById("loadingOverlay").style.display = "none";
+                }
+
+                toggleTheme() {
+                    this.isDark = !this.isDark;
+                    document.body.classList.toggle("dark", this.isDark);
+                    this.updateThemeUI();
+                    if (this.elevationData) this.drawElevationProfile(this.elevationData);
+                }
+                updateThemeUI() {
+                    const icon = document.getElementById("themeIcon");
+                    const text = document.getElementById("themeText");
+                    if (this.isDark) {
+                        icon.textContent = "☀️";
+                        text.textContent = "Light";
+                    } else {
+                        icon.textContent = "🌙";
+                        text.textContent = "Dark";
+                    }
+                }
+
+                toggleSidebar() {
+                    document.getElementById("sidebar").classList.toggle("collapsed");
+                    setTimeout(() => this.scheduleMapResize(), 400);
+                }
+
+                toggleElevation() {
+                    document.getElementById("elevationProfile").classList.toggle("collapsed");
+                    setTimeout(() => {
+                        this.scheduleMapResize();
+                        if (this.elevationData && !document.getElementById("elevationProfile").classList.contains("collapsed")) {
+                            this.drawElevationProfile(this.elevationData);
+                        }
+                    }, 350);
+                }
+
+                uid() { return Math.random().toString(36).slice(2); }
+
+                addPoint(lat, lng) {
+                    const p = { id: this.uid(), lat, lng };
+                    this.points.push(p);
+                    const m = L.marker([lat, lng], { draggable: true }).addTo(this.map);
+                    m.on("click", () => this.removePoint(p.id));
+                    m.on("dragend", (e) => {
+                        const pos = e.target.getLatLng();
+                        p.lat = pos.lat;
+                        p.lng = pos.lng;
+                        this.updateList();
+                        this.clearRoute();
+                        document.getElementById("results").innerHTML = "";
+                        this.hideElevationProfile();
+                    });
+                    this.markers.push({ id: p.id, marker: m });
+                    this.updateList();
+                    this.clearRoute();
+                    document.getElementById("results").innerHTML = "";
+                    this.hideElevationProfile();
+                }
+
+                removePoint(id) {
+                    this.points = this.points.filter((p) => p.id !== id);
+                    const m = this.markers.find((x) => x.id === id);
+                    if (m) this.map.removeLayer(m.marker);
+                    this.markers = this.markers.filter((x) => x.id !== id);
+                    this.updateList();
+                    this.clearRoute();
+                    document.getElementById("results").innerHTML = "";
+                    this.hideElevationProfile();
+                }
+
+                updateList() {
+                    const listDiv = document.getElementById("list");
+                    document.getElementById("stopCount").innerText = this.points.length;
+                    if (this.points.length === 0) {
+                        listDiv.innerHTML =
+                            '<div style="text-align: center; padding: 20px; color: var(--ink-soft); font-size: 13px; font-weight: 500;">🌿 Clicca sulla mappa o aggiungi un indirizzo</div>';
+                        return;
+                    }
+                    listDiv.innerHTML = this.points.map((p, i) => `
+                  <div class="stop-item">
+                    <div class="stop-number">${i + 1}</div>
+                    <div class="stop-info">
+                      <div class="stop-title">Tappa ${i + 1} ${i === 0 ? "🚩" : i === this.points.length - 1 ? "🏁" : ""}</div>
+                      <div class="stop-coords">${p.lat.toFixed(4)}°, ${p.lng.toFixed(4)}°</div>
+                    </div>
+                    <button class="delete-stop" onclick="app.removePoint('${p.id}')">🗑️</button>
+                  </div>
+                `).join("");
+                }
+
+                async geocode(addr) {
+                    const now = Date.now();
+                    if (now - this.lastNominatim < 1100) await new Promise((r) => setTimeout(r, 1100));
+                    this.lastNominatim = Date.now();
+                    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}&limit=1`;
+                    const r = await fetch(url, { headers: { "User-Agent": "TSP-App" } });
+                    const d = await r.json();
+                    if (!d.length) return null;
+                    return { lat: +d[0].lat, lng: +d[0].lon };
+                }
+
+                async addByAddress() {
+                    const addr = document.getElementById("addr").value;
+                    if (!addr) return alert("Inserisci un indirizzo");
+                    this.showLoading();
+                    const g = await this.geocode(addr);
+                    this.hideLoading();
+                    if (!g) return alert("Indirizzo non trovato");
+                    this.addPoint(g.lat, g.lng);
+                    this.map.setView([g.lat, g.lng], 13);
+                }
+
+                async buildMatrix(mode) {
+                    const key = JSON.stringify(this.points.map((p) => [p.lat, p.lng, mode]));
+                    if (this.cache.has(key)) { this.matrix = this.cache.get(key); return; }
+                    const coords = this.points.map((p) => `${p.lng},${p.lat}`).join(";");
+                    const url = `https://router.project-osrm.org/table/v1/${mode}/${coords}?annotations=duration,distance`;
+                    const r = await fetch(url);
+                    const d = await r.json();
+                    this.matrix = { durations: d.durations, distances: d.distances };
+                    this.cache.set(key, this.matrix);
+                }
+
+                cost(path, useDistance = false) {
+                    let s = 0;
+                    const matrix = useDistance ? this.matrix.distances : this.matrix.durations;
+                    for (let i = 1; i < path.length; i++) s += matrix[path[i - 1]][path[i]];
+                    return s;
+                }
+
+                nearestNeighbor(startIndex) {
+                    const n = this.points.length;
+                    const visited = new Set();
+                    let path = [startIndex];
+                    visited.add(startIndex);
+                    while (path.length < n) {
+                        let last = path[path.length - 1];
+                        let best = -1,
+                            bestVal = Infinity;
+                        for (let i = 0; i < n; i++) {
+                            if (visited.has(i)) continue;
+                            const dist = this.matrix.durations[last][i];
+                            if (dist < bestVal && dist !== null && dist !== undefined) { bestVal = dist;
+                                best = i; }
+                        }
+                        if (best === -1) break;
+                        visited.add(best);
+                        path.push(best);
+                    }
+                    return path;
+                }
+
+                multiStartNN() {
+                    let bestPath = null,
+                        bestCost = Infinity;
+                    for (let i = 0; i < this.points.length; i++) {
+                        const p = this.nearestNeighbor(i);
+                        if (p.length === this.points.length) {
+                            const c = this.cost(p);
+                            if (c < bestCost) { bestCost = c;
+                                bestPath = p; }
+                        }
+                    }
+                    return bestPath;
+                }
+
+                twoOpt(path) {
+                    let improved = true;
+                    let bestPath = [...path];
+                    while (improved) {
+                        improved = false;
+                        for (let i = 1; i < bestPath.length - 2; i++) {
+                            for (let j = i + 1; j < bestPath.length; j++) {
+                                const newPath = bestPath.slice(0, i).concat(bestPath.slice(i, j + 1).reverse()).concat(bestPath.slice(j + 1));
+                                if (this.cost(newPath) < this.cost(bestPath)) { bestPath = newPath;
+                                    improved = true; }
+                            }
+                        }
+                    }
+                    return bestPath;
+                }
+
+                async fetchElevationProfile(path, mode) {
+                    const coords = path.map((i) => `${this.points[i].lng},${this.points[i].lat}`).join(";");
+                    const url = `https://router.project-osrm.org/route/v1/${mode}/${coords}?overview=full&geometries=geojson&steps=true`;
+                    const r = await fetch(url);
+                    const d = await r.json();
+                    if (!d.routes || d.routes.length === 0) throw new Error("Percorso non disponibile");
+                    const geometry = d.routes[0].geometry;
+                    const points = geometry.coordinates.map((c) => ({ lng: c[0], lat: c[1] }));
+                    const step = Math.max(1, Math.floor(points.length / 100));
+                    const sampled = points.filter((_, i) => i % step === 0);
+                    const elevUrl = "https://api.open-elevation.com/api/v1/lookup";
+                    const body = { locations: sampled.map((p) => ({ latitude: p.lat, longitude: p.lng })) };
+                    const elevR = await fetch(elevUrl, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(body),
+                    });
+                    if (!elevR.ok) throw new Error("Errore nel recupero altitudini");
+                    const elevD = await elevR.json();
+                    let cumulativeDist = 0;
+                    const distances = [0];
+                    for (let i = 1; i < sampled.length; i++) {
+                        const dx = sampled[i].lng - sampled[i - 1].lng;
+                        const dy = sampled[i].lat - sampled[i - 1].lat;
+                        cumulativeDist += Math.sqrt(dx * dx + dy * dy) * 111.32;
+                        distances.push(cumulativeDist);
+                    }
+                    const elevations = elevD.results.map((r) => r.elevation);
+                    return { elevations, distances };
+                }
+
+                drawElevationProfile(data) {
+                    const canvas = this.canvas;
+                    const ctx = this.ctx;
+                    const profile = document.getElementById("elevationProfile");
+                    if (profile.classList.contains("collapsed")) return;
+
+                    const wrapRect = this.elevationWrap.getBoundingClientRect();
+                    const width = Math.max(0, Math.floor(wrapRect.width));
+                    const height = Math.max(0, Math.floor(wrapRect.height));
+                    if (width === 0 || height === 0) return;
+
+                    const dpr = window.devicePixelRatio || 1;
+                    canvas.width = width * dpr;
+                    canvas.height = height * dpr;
+                    canvas.style.width = width + "px";
+                    canvas.style.height = height + "px";
+                    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+                    const padding = { top: 6, bottom: 4, left: 6, right: 6 };
+                    const chartWidth = width - padding.left - padding.right;
+                    const chartHeight = height - padding.top - padding.bottom;
+
+                    const elevs = data.elevations;
+                    const dists = data.distances;
+                    const rootStyles = getComputedStyle(document.documentElement);
+                    const inkSoft = rootStyles.getPropertyValue("--ink-soft").trim() || "#52604e";
+                    const bodyFont = rootStyles.getPropertyValue("--font-body").trim() || "sans-serif";
+
+                    if (elevs.length < 2) {
+                        ctx.clearRect(0, 0, width, height);
+                        ctx.fillStyle = inkSoft;
+                        ctx.font = `10px ${bodyFont}`;
+                        ctx.textAlign = "center";
+                        ctx.fillText("Dati altimetrici insufficienti", width / 2, height / 2 + 4);
+                        return;
+                    }
+
+                    let minElev = Math.min(...elevs);
+                    let maxElev = Math.max(...elevs);
+                    const range = maxElev - minElev || 1;
+                    const isDark = this.isDark;
+                    const lineColor = isDark ? "#e2803f" : "#c1562f";
+                    const fillColor = isDark ? "rgba(226, 128, 63, 0.2)" : "rgba(193, 86, 47, 0.15)";
+                    const gridColor = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)";
+                    const textColor = inkSoft;
+
+                    ctx.clearRect(0, 0, width, height);
+
+                    ctx.strokeStyle = gridColor;
+                    ctx.lineWidth = 0.5;
+                    for (let i = 0; i <= 4; i++) {
+                        const y = padding.top + (chartHeight / 4) * i;
+                        ctx.beginPath();
+                        ctx.moveTo(padding.left, y);
+                        ctx.lineTo(width - padding.right, y);
+                        ctx.stroke();
+                    }
+
+                    ctx.beginPath();
+                    const startX = padding.left;
+                    const startY = padding.top + chartHeight - ((elevs[0] - minElev) / range) * chartHeight;
+                    ctx.moveTo(startX, startY);
+                    for (let i = 0; i < elevs.length; i++) {
+                        const x = padding.left + (dists[i] / dists[dists.length - 1]) * chartWidth;
+                        const y = padding.top + chartHeight - ((elevs[i] - minElev) / range) * chartHeight;
+                        ctx.lineTo(x, y);
+                    }
+                    const lastX = padding.left + chartWidth;
+                    ctx.lineTo(lastX, padding.top + chartHeight);
+                    ctx.lineTo(startX, padding.top + chartHeight);
+                    ctx.closePath();
+                    ctx.fillStyle = fillColor;
+                    ctx.fill();
+
+                    ctx.beginPath();
+                    for (let i = 0; i < elevs.length; i++) {
+                        const x = padding.left + (dists[i] / dists[dists.length - 1]) * chartWidth;
+                        const y = padding.top + chartHeight - ((elevs[i] - minElev) / range) * chartHeight;
+                        if (i === 0) ctx.moveTo(x, y);
+                        else ctx.lineTo(x, y);
+                    }
+                    ctx.strokeStyle = lineColor;
+                    ctx.lineWidth = 2.5;
+                    ctx.stroke();
+
+                    const totalDist = dists[dists.length - 1];
+                    const gain = maxElev - minElev;
+                    document.getElementById("elevationStats").textContent = `${totalDist.toFixed(1)} km · ${Math.round(gain)} m dislivello`;
+                    document.getElementById("elevMin").textContent = `${Math.round(minElev)} m`;
+                    document.getElementById("elevMax").textContent = `${Math.round(maxElev)} m`;
+                }
+
+                hideElevationProfile() {
+                    document.getElementById("elevationProfile").classList.add("collapsed");
+                    this.elevationData = null;
+                }
+
+                async draw(path, mode) {
+                    const coords = path.map((i) => `${this.points[i].lng},${this.points[i].lat}`).join(";");
+                    const url = `https://router.project-osrm.org/route/v1/${mode}/${coords}?overview=full&geometries=geojson&steps=true`;
+                    const r = await fetch(url);
+                    const d = await r.json();
+                    if (!d.routes || d.routes.length === 0) throw new Error("Percorso non disponibile");
+                    const route = d.routes[0];
+                    if (this.routeLayer) this.map.removeLayer(this.routeLayer);
+                    this.routeLayer = L.geoJSON(route.geometry, {
+                        style: { color: "#22c55e", weight: 5, opacity: 0.9 },
+                    }).addTo(this.map);
+
+                    const totalDistance = (route.distance / 1000).toFixed(1);
+                    const totalDuration = Math.round(route.duration / 60);
+                    document.getElementById("results").innerHTML = `
+                  <div class="results-card">
+                    <div class="stat-row"><span class="stat-label">📏 Distanza</span><span class="stat-value">${totalDistance} km</span></div>
+                    <div class="stat-row"><span class="stat-label">⏱️ Durata</span><span class="stat-value">${totalDuration} min</span></div>
+                    <div class="stat-row"><span class="stat-label">📍 Tappe</span><span class="stat-value">${this.points.length}</span></div>
+                    <div class="stat-row"><span class="stat-label">✨ Algoritmo</span><span class="stat-value">${document.getElementById("algo").options[document.getElementById("algo").selectedIndex].text}</span></div>
+                  </div>
+                `;
+
+                    try {
+                        const elevData = await this.fetchElevationProfile(path, mode);
+                        this.elevationData = elevData;
+                        document.getElementById("elevationProfile").classList.remove("collapsed");
+                        this.drawElevationProfile(elevData);
+                    } catch (err) {
+                        console.warn("Profilo altimetrico non disponibile:", err);
+                        this.hideElevationProfile();
+                    }
+
+                    requestAnimationFrame(() => {
+                        this.map.invalidateSize();
+                        this.map.fitBounds(this.routeLayer.getBounds());
+                    });
+                }
+
+                rebuildMarkers(path) {
+                    this.markers.forEach((m) => this.map.removeLayer(m.marker));
+                    this.markers = [];
+                    path.forEach((i, idx) => {
+                        const p = this.points[i];
+                        let iconHtml = `<div style="background: #22c55e; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">${idx + 1}</div>`;
+                        if (idx === 0) iconHtml =
+                            `<div style="background: #22c55e; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; border: 2px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">🚩</div>`;
+                        if (idx === path.length - 1) iconHtml =
+                            `<div style="background: #22c55e; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; border: 2px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">🏁</div>`;
+                        const icon = L.divIcon({
+                            className: "custom-marker",
+                            html: iconHtml,
+                            iconSize: [28, 28],
+                            iconAnchor: [14, 14],
+                            popupAnchor: [0, -14],
+                        });
+                        const m = L.marker([p.lat, p.lng], { icon }).addTo(this.map);
+                        m.bindPopup(`Tappa ${idx + 1}${idx === 0 ? " (Partenza)" : idx === path.length - 1 ? " (Arrivo)" : ""}`);
+                        m.on("click", () => this.removePoint(p.id));
+                        this.markers.push({ id: p.id, marker: m });
+                    });
+                }
+
+                clearRoute() {
+                    if (this.routeLayer) this.map.removeLayer(this.routeLayer);
+                    this.routeLayer = null;
+                }
+
+                async calculate() {
+                    if (this.points.length < 2) { alert("Inserisci almeno 2 tappe"); return; }
+                    this.showLoading();
+                    this.clearRoute();
+                    document.getElementById("results").innerHTML = "";
+                    const mode = document.getElementById("mode").value;
+                    const algo = document.getElementById("algo").value;
+                    try {
+                        await this.buildMatrix(mode);
+                        let path = algo === "nn" ? this.multiStartNN() : this.twoOpt(this.multiStartNN());
+                        if (!path || path.length !== this.points.length) throw new Error("Errore nel calcolo");
+                        await this.draw(path, mode);
+                        this.rebuildMarkers(path);
+                    } catch (error) {
+                        alert("Errore: " + error.message);
+                    } finally {
+                        this.hideLoading();
+                    }
+                }
+
+                reset() {
+                    this.points = [];
+                    this.markers.forEach((m) => this.map.removeLayer(m.marker));
+                    this.markers = [];
+                    this.clearRoute();
+                    this.hideElevationProfile();
+                    this.updateList();
+                    document.getElementById("results").innerHTML = "";
+                }
+            }
+
+            const app = new RoutePlanner();
+        </script>
+    </body>
+</html>

@@ -5,6 +5,7 @@
  * - Gestione tappe (aggiunta, rimozione, modifica)
  * - Calcolo percorso ottimale con algoritmi TSP
  * - Tema chiaro/scuro
+ * - Profilo altimetrico
  */
 class RoutePlanner {
 
@@ -18,7 +19,7 @@ class RoutePlanner {
 
         // Aggiunta del layer delle piastrelle OpenStreetMap
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors', // Attribuzione richiesta da OSM
+            attribution: '© OpenStreetMap contributors',
             maxZoom: 19
         }).addTo(this.map);
 
@@ -29,10 +30,10 @@ class RoutePlanner {
         this.cache = new Map();     // Cache per matrici già calcolate
 
         // Rate limiting per Nominatim (1 richiesta al secondo)
-        this.lastNominatim = 0;     // Timestamp ultima geocodifica
+        this.lastNominatim = 0;
 
         // Layer della route tracciata sulla mappa
-        this.routeLayer = null;     // Layer del percorso disegnato
+        this.routeLayer = null;
 
         // Tema corrente (false = light, true = dark)
         this.isDark = false;
@@ -47,6 +48,43 @@ class RoutePlanner {
 
         // Aggiorna l'interfaccia del tema (icone e testi)
         this.updateThemeUI();
+
+        // Riferimento al canvas per il profilo altimetrico
+        this.canvas = document.getElementById('elevationCanvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.elevationWrap = document.getElementById('elevationCanvasWrap');
+
+        // Dati del profilo altimetrico
+        this.elevationData = null;
+
+        // La mappa Leaflet non si accorge da sola se il suo contenitore
+        // cambia dimensione (sidebar che cresce, pannello altimetrico che
+        // appare/scompare, rotazione schermo, resize finestra...).
+        // Un ResizeObserver sul contenitore osserva TUTTI questi casi,
+        // non solo il resize della finestra.
+        this.resizeRAF = null;
+        const mapContainer = document.querySelector('.map-container');
+        this.mapResizeObserver = new ResizeObserver(() => this.scheduleMapResize());
+        this.mapResizeObserver.observe(mapContainer);
+
+        // Allo stesso modo, il canvas del profilo altimetrico deve
+        // ridisegnarsi ogni volta che il SUO wrapper cambia dimensione,
+        // non solo quando cambia la finestra.
+        this.elevationResizeObserver = new ResizeObserver(() => {
+            if (this.elevationData) this.drawElevationProfile(this.elevationData);
+        });
+        this.elevationResizeObserver.observe(this.elevationWrap);
+    }
+
+    /**
+     * Pianifica un invalidateSize() della mappa in un unico frame,
+     * evitando ricalcoli multipli e inutili durante un resize continuo
+     */
+    scheduleMapResize() {
+        if (this.resizeRAF) cancelAnimationFrame(this.resizeRAF);
+        this.resizeRAF = requestAnimationFrame(() => {
+            this.map.invalidateSize();
+        });
     }
 
     /**
@@ -69,11 +107,15 @@ class RoutePlanner {
     toggleTheme() {
         this.isDark = !this.isDark;
         if (this.isDark) {
-            document.body.classList.add('dark');   // Aggiunge classe dark al body
+            document.body.classList.add('dark');
         } else {
-            document.body.classList.remove('dark'); // Rimuove classe dark
+            document.body.classList.remove('dark');
         }
-        this.updateThemeUI(); // Aggiorna icone e testi
+        this.updateThemeUI();
+        // Ridisegna il profilo se visibile
+        if (this.elevationData) {
+            this.drawElevationProfile(this.elevationData);
+        }
     }
 
     /**
@@ -83,10 +125,10 @@ class RoutePlanner {
         const icon = document.getElementById('themeIcon');
         const text = document.getElementById('themeText');
         if (this.isDark) {
-            icon.textContent = '☀️';   // Sole per tema scuro (passa a light)
+            icon.textContent = '☀️';
             text.textContent = 'Light';
         } else {
-            icon.textContent = '🌙';   // Luna per tema chiaro (passa a dark)
+            icon.textContent = '🌙';
             text.textContent = 'Dark';
         }
     }
@@ -96,9 +138,6 @@ class RoutePlanner {
      * @returns {string} ID randomico
      */
     uid() {
-        // Math.random() -> numero casuale
-        // toString(36) -> converte in base36 (lettere + numeri)
-        // slice(2) -> rimuove '0.' iniziale
         return Math.random().toString(36).slice(2);
     }
 
@@ -108,33 +147,29 @@ class RoutePlanner {
      * @param {number} lng - Longitudine
      */
     addPoint(lat, lng) {
-        // Crea oggetto tappa con ID univoco
         const p = { id: this.uid(), lat, lng };
         this.points.push(p);
 
-        // Crea marker trascinabile su Leaflet
         const m = L.marker([lat, lng], { draggable: true }).addTo(this.map);
 
-        // Click sul marker: rimuove la tappa
         m.on('click', () => this.removePoint(p.id));
 
-        // Trascinamento: aggiorna coordinate e pulisce risultati
         m.on('dragend', (e) => {
             const pos = e.target.getLatLng();
             p.lat = pos.lat;
             p.lng = pos.lng;
-            this.updateList();           // Aggiorna lista UI
-            this.clearRoute();           // Cancella percorso disegnato
-            document.getElementById('results').innerHTML = ''; // Pulisce risultati
+            this.updateList();
+            this.clearRoute();
+            document.getElementById('results').innerHTML = '';
+            this.hideElevationProfile();
         });
 
-        // Salva riferimento marker
         this.markers.push({ id: p.id, marker: m });
 
-        // Aggiorna interfaccia utente
-        this.updateList();           // Ricostruisce lista tappe
-        this.clearRoute();           // Cancella vecchio percorso
-        document.getElementById('results').innerHTML = ''; // Pulisce risultati
+        this.updateList();
+        this.clearRoute();
+        document.getElementById('results').innerHTML = '';
+        this.hideElevationProfile();
     }
 
     /**
@@ -142,20 +177,17 @@ class RoutePlanner {
      * @param {string} id - ID della tappa da rimuovere
      */
     removePoint(id) {
-        // Filtra le tappe escludendo quella da rimuovere
         this.points = this.points.filter(p => p.id !== id);
 
-        // Trova e rimuove il marker dalla mappa
         const m = this.markers.find(x => x.id === id);
         if (m) this.map.removeLayer(m.marker);
 
-        // Rimuove il riferimento dall'array markers
         this.markers = this.markers.filter(x => x.id !== id);
 
-        // Aggiorna UI
         this.updateList();
-        this.clearRoute();           // Cancella percorso
+        this.clearRoute();
         document.getElementById('results').innerHTML = '';
+        this.hideElevationProfile();
     }
 
     /**
@@ -165,14 +197,11 @@ class RoutePlanner {
         const listDiv = document.getElementById("list");
         document.getElementById("stopCount").innerText = this.points.length;
 
-        // Se non ci sono tappe, mostra messaggio placeholder
         if (this.points.length === 0) {
-            listDiv.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-secondary); font-size: 12px;">🌿 Clicca sulla mappa o aggiungi un indirizzo</div>';
+            listDiv.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--ink-soft); font-size: 12px;">🌿 Clicca sulla mappa o aggiungi un indirizzo</div>';
             return;
         }
 
-        // Genera HTML per ogni tappa
-        // i = indice (0-based), trasformato in 1-based per visualizzazione
         listDiv.innerHTML = this.points.map((p, i) => `
           <div class="stop-item">
             <div class="stop-number">${i + 1}</div>
@@ -182,7 +211,7 @@ class RoutePlanner {
             </div>
             <button class="delete-stop" onclick="app.removePoint('${p.id}')">🗑️</button>
           </div>
-        `).join(''); // join('') trasforma array in stringa HTML unica
+        `).join('');
     }
 
     /**
@@ -191,20 +220,17 @@ class RoutePlanner {
      * @returns {Promise<{lat: number, lng: number} | null>} Coordinate o null
      */
     async geocode(addr) {
-        // Rate limiting: attendi almeno 1100ms tra una richiesta e l'altra
         const now = Date.now();
         if (now - this.lastNominatim < 1100) {
             await new Promise(r => setTimeout(r, 1100));
         }
         this.lastNominatim = Date.now();
 
-        // Chiamata API a Nominatim (OpenStreetMap geocoding)
         const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}&limit=1`;
         const r = await fetch(url, { headers: { "User-Agent": "TSP-App" } });
         const d = await r.json();
 
         if (!d.length) return null;
-        // Restituisce latitudine e longitudine del primo risultato
         return { lat: +d[0].lat, lng: +d[0].lon };
     }
 
@@ -215,14 +241,14 @@ class RoutePlanner {
         const addr = document.getElementById("addr").value;
         if (!addr) return alert("Inserisci un indirizzo");
 
-        this.showLoading();          // Mostra caricamento
-        const g = await this.geocode(addr); // Geocodifica
-        this.hideLoading();          // Nasconde caricamento
+        this.showLoading();
+        const g = await this.geocode(addr);
+        this.hideLoading();
 
         if (!g) return alert("Indirizzo non trovato");
 
-        this.addPoint(g.lat, g.lng);      // Aggiunge tappa
-        this.map.setView([g.lat, g.lng], 13); // Centra mappa sulla posizione
+        this.addPoint(g.lat, g.lng);
+        this.map.setView([g.lat, g.lng], 13);
     }
 
     /**
@@ -231,29 +257,24 @@ class RoutePlanner {
      * @param {string} mode - Modalità di trasporto ('driving' o 'walking')
      */
     async buildMatrix(mode) {
-        // Crea chiave cache basata su coordinate e modalità
         const key = JSON.stringify(this.points.map(p => [p.lat, p.lng, mode]));
 
-        // Se già in cache, riutilizza
         if (this.cache.has(key)) {
             this.matrix = this.cache.get(key);
             return;
         }
 
-        // Formato coordinate per OSRM: lng,lat;lng,lat;...
         const coords = this.points.map(p => `${p.lng},${p.lat}`).join(';');
         const url = `https://router.project-osrm.org/table/v1/${mode}/${coords}?annotations=duration,distance`;
 
         const r = await fetch(url);
         const d = await r.json();
 
-        // Salva sia durate (minuti) che distanze (metri)
         this.matrix = {
-            durations: d.durations,   // Tempi in secondi
-            distances: d.distances    // Distanze in metri
+            durations: d.durations,
+            distances: d.distances
         };
 
-        // Memorizza in cache per future richieste
         this.cache.set(key, this.matrix);
     }
 
@@ -267,7 +288,6 @@ class RoutePlanner {
         let s = 0;
         const matrix = useDistance ? this.matrix.distances : this.matrix.durations;
 
-        // Somma i costi tra tappe consecutive
         for (let i = 1; i < path.length; i++) {
             s += matrix[path[i - 1]][path[i]];
         }
@@ -276,23 +296,20 @@ class RoutePlanner {
 
     /**
      * Algoritmo Nearest Neighbor (vicino più prossimo)
-     * Parte da un indice startIndex e visita la tappa più vicina ad ogni passo
      * @param {number} startIndex - Indice della tappa di partenza
      * @returns {number[]} Percorso ottenuto
      */
     nearestNeighbor(startIndex) {
         const n = this.points.length;
-        const visited = new Set();    // Insieme delle tappe già visitate
-        let path = [startIndex];      // Percorso inizia con tappa start
+        const visited = new Set();
+        let path = [startIndex];
         visited.add(startIndex);
 
-        // Continua finché non visita tutte le tappe
         while (path.length < n) {
-            let last = path[path.length - 1]; // Ultima tappa visitata
+            let last = path[path.length - 1];
             let best = -1;
             let bestVal = Infinity;
 
-            // Cerca la tappa non visitata più vicina
             for (let i = 0; i < n; i++) {
                 if (visited.has(i)) continue;
                 const dist = this.matrix.durations[last][i];
@@ -301,7 +318,7 @@ class RoutePlanner {
                     best = i;
                 }
             }
-            if (best === -1) break;   // Nessuna tappa raggiungibile
+            if (best === -1) break;
 
             visited.add(best);
             path.push(best);
@@ -311,19 +328,17 @@ class RoutePlanner {
 
     /**
      * Nearest Neighbor con multiple partenze
-     * Prova tutte le tappe come punto di partenza e sceglie il percorso migliore
      * @returns {number[]} Miglior percorso trovato
      */
     multiStartNN() {
         let bestPath = null;
         let bestCost = Infinity;
 
-        // Prova ogni tappa come punto di partenza
         for (let i = 0; i < this.points.length; i++) {
             const p = this.nearestNeighbor(i);
-            if (p.length === this.points.length) { // Verifica percorso completo
+            if (p.length === this.points.length) {
                 const c = this.cost(p);
-                if (c < bestCost) {  // Se migliore del best, aggiorna
+                if (c < bestCost) {
                     bestCost = c;
                     bestPath = p;
                 }
@@ -334,27 +349,22 @@ class RoutePlanner {
 
     /**
      * Algoritmo 2-Opt per ottimizzazione percorsi
-     * Inverte segmenti del percorso per ridurre il costo totale
      * @param {number[]} path - Percorso iniziale
      * @returns {number[]} Percorso ottimizzato
      */
     twoOpt(path) {
         let improved = true;
-        let bestPath = [...path]; // Copia del percorso originale
+        let bestPath = [...path];
 
-        // Continua finché si trovano miglioramenti
         while (improved) {
             improved = false;
 
-            // Prova tutte le possibili inversioni di segmenti
             for (let i = 1; i < bestPath.length - 2; i++) {
                 for (let j = i + 1; j < bestPath.length; j++) {
-                    // Inverte il segmento da i a j
                     const newPath = bestPath.slice(0, i)
                         .concat(bestPath.slice(i, j + 1).reverse())
                         .concat(bestPath.slice(j + 1));
 
-                    // Se migliora il costo, applica la modifica
                     if (this.cost(newPath) < this.cost(bestPath)) {
                         bestPath = newPath;
                         improved = true;
@@ -366,12 +376,205 @@ class RoutePlanner {
     }
 
     /**
+     * Recupera il profilo altimetrico del percorso
+     * @param {number[]} path - Ordine delle tappe
+     * @param {string} mode - Modalità di trasporto
+     * @returns {Promise<{elevations: number[], distances: number[]}>}
+     */
+    async fetchElevationProfile(path, mode) {
+        // Ottieni la geometria del percorso da OSRM
+        const coords = path.map(i => `${this.points[i].lng},${this.points[i].lat}`).join(';');
+        const url = `https://router.project-osrm.org/route/v1/${mode}/${coords}?overview=full&geometries=geojson&steps=true`;
+        const r = await fetch(url);
+        const d = await r.json();
+
+        if (!d.routes || d.routes.length === 0) throw new Error("Percorso non disponibile");
+
+        // Estrai i punti della geometria
+        const geometry = d.routes[0].geometry;
+        const points = geometry.coordinates.map(c => ({ lng: c[0], lat: c[1] }));
+
+        // Campiona un numero ragionevole di punti (massimo 100)
+        const step = Math.max(1, Math.floor(points.length / 100));
+        const sampled = points.filter((_, i) => i % step === 0);
+
+        // Chiamata API Open-Elevation per le altitudini
+        const elevUrl = 'https://api.open-elevation.com/api/v1/lookup';
+        const body = {
+            locations: sampled.map(p => ({ latitude: p.lat, longitude: p.lng }))
+        };
+
+        const elevR = await fetch(elevUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+
+        if (!elevR.ok) throw new Error('Errore nel recupero altitudini');
+
+        const elevD = await elevR.json();
+
+        // Costruisci le distanze cumulative lungo il percorso
+        let cumulativeDist = 0;
+        const distances = [0];
+
+        for (let i = 1; i < sampled.length; i++) {
+            const dx = sampled[i].lng - sampled[i-1].lng;
+            const dy = sampled[i].lat - sampled[i-1].lat;
+            // Approssimazione in km (non precisa ma sufficiente per il profilo)
+            cumulativeDist += Math.sqrt(dx*dx + dy*dy) * 111.32;
+            distances.push(cumulativeDist);
+        }
+
+        const elevations = elevD.results.map(r => r.elevation);
+
+        return { elevations, distances };
+    }
+
+    /**
+     * Disegna il profilo altimetrico sul canvas
+     * @param {{elevations: number[], distances: number[]}} data
+     */
+    drawElevationProfile(data) {
+        const canvas = this.canvas;
+        const ctx = this.ctx;
+
+        // Il pannello va reso visibile PRIMA di misurare il wrapper:
+        // finché è display:none le sue dimensioni sono 0x0. Cambiare la
+        // classe e poi leggere subito getBoundingClientRect forza il
+        // browser a un reflow sincrono, quindi la misura è già corretta.
+        document.getElementById('elevationProfile').classList.add('visible');
+
+        // Le dimensioni si leggono dal wrapper dedicato al canvas, non
+        // dall'intero pannello (che include anche header ed etichette):
+        // usare quello causava un'altezza sbagliata e un profilo
+        // tagliato o schiacciato.
+        const wrapRect = this.elevationWrap.getBoundingClientRect();
+        const width = Math.max(0, Math.floor(wrapRect.width));
+        const height = Math.max(0, Math.floor(wrapRect.height));
+
+        // Se il pannello non è (ancora) visibile o non ha spazio reale,
+        // rimandiamo: disegnare su un canvas 0x0 non ha senso e verrà
+        // comunque richiamato dal ResizeObserver appena avrà dimensioni.
+        if (width === 0 || height === 0) return;
+
+        const dpr = window.devicePixelRatio || 1;
+
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        canvas.style.width = width + 'px';
+        canvas.style.height = height + 'px';
+
+        // setTransform (invece di scale) resetta la matrice ad ogni
+        // ridisegno: con scale() la trasformazione si accumulerebbe ogni
+        // volta (cambio tema, resize, ecc.), deformando il profilo dopo
+        // pochi ridisegni.
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        const padding = { top: 6, bottom: 4, left: 6, right: 6 };
+        const chartWidth = width - padding.left - padding.right;
+        const chartHeight = height - padding.top - padding.bottom;
+
+        const elevs = data.elevations;
+        const dists = data.distances;
+
+        // Le CSS custom properties non sono valori validi per fillStyle/
+        // font del canvas: vanno risolte leggendo il loro valore calcolato.
+        const rootStyles = getComputedStyle(document.documentElement);
+        const inkSoft = rootStyles.getPropertyValue('--ink-soft').trim() || '#52604e';
+        const bodyFont = rootStyles.getPropertyValue('--font-body').trim() || 'sans-serif';
+
+        if (elevs.length < 2) {
+            ctx.clearRect(0, 0, width, height);
+            ctx.fillStyle = inkSoft;
+            ctx.font = `10px ${bodyFont}`;
+            ctx.textAlign = 'center';
+            ctx.fillText('Dati altimetrici insufficienti', width/2, height/2 + 4);
+            return;
+        }
+
+        // Calcola min e max
+        let minElev = Math.min(...elevs);
+        let maxElev = Math.max(...elevs);
+        const range = maxElev - minElev || 1;
+
+        // Colori tema
+        const isDark = this.isDark;
+        const lineColor = isDark ? '#e2803f' : '#c1562f';
+        const fillColor = isDark ? 'rgba(226, 128, 63, 0.2)' : 'rgba(193, 86, 47, 0.15)';
+        const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
+        const textColor = inkSoft;
+
+        ctx.clearRect(0, 0, width, height);
+
+        // Linee della griglia
+        ctx.strokeStyle = gridColor;
+        ctx.lineWidth = 0.5;
+        for (let i = 0; i <= 4; i++) {
+            const y = padding.top + (chartHeight / 4) * i;
+            ctx.beginPath();
+            ctx.moveTo(padding.left, y);
+            ctx.lineTo(width - padding.right, y);
+            ctx.stroke();
+        }
+
+        // Area fill
+        ctx.beginPath();
+        const startX = padding.left;
+        const startY = padding.top + chartHeight - ((elevs[0] - minElev) / range) * chartHeight;
+        ctx.moveTo(startX, startY);
+
+        for (let i = 0; i < elevs.length; i++) {
+            const x = padding.left + (dists[i] / dists[dists.length-1]) * chartWidth;
+            const y = padding.top + chartHeight - ((elevs[i] - minElev) / range) * chartHeight;
+            ctx.lineTo(x, y);
+        }
+
+        // Chiudi il poligono fino in basso
+        const lastX = padding.left + chartWidth;
+        ctx.lineTo(lastX, padding.top + chartHeight);
+        ctx.lineTo(startX, padding.top + chartHeight);
+        ctx.closePath();
+
+        ctx.fillStyle = fillColor;
+        ctx.fill();
+
+        // Linea del profilo
+        ctx.beginPath();
+        for (let i = 0; i < elevs.length; i++) {
+            const x = padding.left + (dists[i] / dists[dists.length-1]) * chartWidth;
+            const y = padding.top + chartHeight - ((elevs[i] - minElev) / range) * chartHeight;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = lineColor;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Aggiorna statistiche
+        const totalDist = dists[dists.length-1];
+        const gain = maxElev - minElev;
+        document.getElementById('elevationStats').textContent =
+            `${totalDist.toFixed(1)} km · ${Math.round(gain)} m dislivello`;
+
+        document.getElementById('elevMin').textContent = `${Math.round(minElev)} m`;
+        document.getElementById('elevMax').textContent = `${Math.round(maxElev)} m`;
+    }
+
+    /**
+     * Nasconde il profilo altimetrico
+     */
+    hideElevationProfile() {
+        document.getElementById('elevationProfile').classList.remove('visible');
+        this.elevationData = null;
+    }
+
+    /**
      * Disegna il percorso sulla mappa e mostra statistiche
      * @param {number[]} path - Ordine ottimale delle tappe
      * @param {string} mode - Modalità di trasporto
      */
     async draw(path, mode) {
-        // Costruisce stringa coordinate per OSRM: lng,lat;lng,lat...
         const coords = path.map(i => `${this.points[i].lng},${this.points[i].lat}`).join(';');
         const url = `https://router.project-osrm.org/route/v1/${mode}/${coords}?overview=full&geometries=geojson&steps=true`;
         const r = await fetch(url);
@@ -381,22 +584,15 @@ class RoutePlanner {
 
         const route = d.routes[0];
 
-        // Rimuove vecchio layer percorso
         if (this.routeLayer) this.map.removeLayer(this.routeLayer);
 
-        // Aggiunge nuovo layer con stile verde
         this.routeLayer = L.geoJSON(route.geometry, {
             style: { color: "#22c55e", weight: 5, opacity: 0.9 }
         }).addTo(this.map);
 
-        // Centra mappa sul percorso
-        this.map.fitBounds(this.routeLayer.getBounds());
+        const totalDistance = (route.distance / 1000).toFixed(1);
+        const totalDuration = Math.round(route.duration / 60);
 
-        // Calcola statistiche
-        const totalDistance = (route.distance / 1000).toFixed(1);  // km
-        const totalDuration = Math.round(route.duration / 60);    // minuti
-
-        // Mostra risultati
         document.getElementById("results").innerHTML = `
           <div class="results-card">
             <div class="stat-row"><span class="stat-label">📏 Distanza</span><span class="stat-value">${totalDistance} km</span></div>
@@ -405,6 +601,28 @@ class RoutePlanner {
             <div class="stat-row"><span class="stat-label">✨ Algoritmo</span><span class="stat-value">${document.getElementById("algo").options[document.getElementById("algo").selectedIndex].text}</span></div>
           </div>
         `;
+
+        // Recupera e disegna il profilo altimetrico. Lo facciamo PRIMA di
+        // inquadrare il percorso perché mostrare/nascondere questo pannello
+        // cambia l'altezza della mappa: se calcolassimo i bounds prima,
+        // l'inquadratura risulterebbe sbagliata non appena il pannello
+        // compare o scompare.
+        try {
+            const elevData = await this.fetchElevationProfile(path, mode);
+            this.elevationData = elevData;
+            this.drawElevationProfile(elevData);
+        } catch (err) {
+            console.warn('Profilo altimetrico non disponibile:', err);
+            this.hideElevationProfile();
+        }
+
+        // Aspetta un frame per lasciare che il layout si assesti
+        // (transizione del pannello altimetrico), poi ricalcola le
+        // dimensioni reali della mappa e inquadra il percorso.
+        requestAnimationFrame(() => {
+            this.map.invalidateSize();
+            this.map.fitBounds(this.routeLayer.getBounds());
+        });
     }
 
     /**
@@ -412,24 +630,20 @@ class RoutePlanner {
      * @param {number[]} path - Ordine ottimale delle tappe
      */
     rebuildMarkers(path) {
-        // Rimuove tutti i marker esistenti
         this.markers.forEach(m => this.map.removeLayer(m.marker));
         this.markers = [];
 
-        // Ricrea marker nell'ordine del percorso
         path.forEach((i, idx) => {
             const p = this.points[i];
 
-            // HTML personalizzato per ogni marker
             let iconHtml = `<div style="background: #22c55e; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">${idx + 1}</div>`;
 
-            if (idx === 0) // Primo marker: bandiera partenza
+            if (idx === 0)
                 iconHtml = `<div style="background: #22c55e; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">🚩</div>`;
 
-            if (idx === path.length - 1) // Ultimo marker: bandiera arrivo
+            if (idx === path.length - 1)
                 iconHtml = `<div style="background: #22c55e; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">🏁</div>`;
 
-            // Crea icona personalizzata Leaflet
             const icon = L.divIcon({
                 className: 'custom-marker',
                 html: iconHtml,
@@ -438,10 +652,9 @@ class RoutePlanner {
                 popupAnchor: [0, -14]
             });
 
-            // Aggiunge marker alla mappa
             const m = L.marker([p.lat, p.lng], { icon }).addTo(this.map);
             m.bindPopup(`Tappa ${idx + 1}${idx === 0 ? ' (Partenza)' : idx === path.length-1 ? ' (Arrivo)' : ''}`);
-            m.on('click', () => this.removePoint(p.id)); // Click per rimuovere
+            m.on('click', () => this.removePoint(p.id));
 
             this.markers.push({ id: p.id, marker: m });
         });
@@ -460,41 +673,34 @@ class RoutePlanner {
      * Metodo principale che coordina tutte le operazioni
      */
     async calculate() {
-        // Verifica numero minimo di tappe
         if (this.points.length < 2) {
             alert("Inserisci almeno 2 tappe");
             return;
         }
 
-        // Prepara UI
         this.showLoading();
         this.clearRoute();
         document.getElementById("results").innerHTML = "";
+        this.hideElevationProfile();
 
-        // Legge opzioni UI
         const mode = document.getElementById("mode").value;
         const algo = document.getElementById("algo").value;
 
         try {
-            // 1. Costruisce matrice distanze/tempi
             await this.buildMatrix(mode);
 
-            // 2. Calcola percorso ottimale (NN o 2-Opt)
             let path = algo === "nn" ? this.multiStartNN() : this.twoOpt(this.multiStartNN());
 
             if (!path || path.length !== this.points.length)
                 throw new Error("Errore nel calcolo");
 
-            // 3. Disegna percorso sulla mappa
             await this.draw(path, mode);
-
-            // 4. Ricostruisce marker con numerazione corretta
             this.rebuildMarkers(path);
 
         } catch (error) {
             alert("Errore: " + error.message);
         } finally {
-            this.hideLoading(); // Nasconde overlay sempre
+            this.hideLoading();
         }
     }
 
@@ -503,22 +709,18 @@ class RoutePlanner {
      * Rimuove tutte le tappe, percorsi e risultati
      */
     reset() {
-        // Svuota array tappe
         this.points = [];
 
-        // Rimuove marker dalla mappa
         this.markers.forEach(m => this.map.removeLayer(m.marker));
         this.markers = [];
 
-        // Rimuove percorso
         this.clearRoute();
+        this.hideElevationProfile();
 
-        // Aggiorna UI
         this.updateList();
         document.getElementById("results").innerHTML = "";
     }
 }
 
 // Istanzia l'applicazione globale
-// L'oggetto 'app' è accessibile da onclick negli elementi HTML
 const app = new RoutePlanner();
