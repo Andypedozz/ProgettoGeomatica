@@ -58,7 +58,9 @@ body {
     font-family: var(--font-body);
     background-color: var(--paper);
     color: var(--ink);
-    transition: background-color 0.4s ease, color 0.4s ease;
+    transition:
+        background-color 0.4s ease,
+        color 0.4s ease;
     background-image: radial-gradient(var(--line-strong) 1px, transparent 1px);
     background-size: 24px 24px;
 }
@@ -73,7 +75,7 @@ body {
     outline-offset: 2px;
 }
 
-/* ---------- HEADER ---------- */
+/* HEADER */
 .header {
     background: var(--header-bg);
     color: #f4f6ee;
@@ -161,7 +163,7 @@ body {
     transform: translateY(-2px);
 }
 
-/* ---------- LAYOUT ---------- */
+/* LAYOUT */
 .main-layout {
     display: flex;
     flex-direction: column;
@@ -174,7 +176,11 @@ body {
 .sidebar {
     background: var(--surface);
     border-bottom: 1px solid var(--line-strong);
-    transition: background 0.4s ease, border-color 0.4s ease, max-height 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.4s ease;
+    transition:
+        background 0.4s ease,
+        border-color 0.4s ease,
+        max-height 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+        opacity 0.4s ease;
     width: 100%;
     max-height: 50vh;
     overflow-y: auto;
@@ -199,16 +205,12 @@ body {
 
 .controls-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     gap: 10px;
     margin-bottom: 12px;
 }
 .addr-group {
     grid-column: 1 / -1;
-}
-.mode-group,
-.algo-group {
-    min-width: 0;
 }
 
 .button-group {
@@ -218,7 +220,7 @@ body {
     margin-bottom: 14px;
 }
 
-/* ---------- MAP ---------- */
+/* MAP */
 .map-container {
     flex: 1;
     position: relative;
@@ -240,14 +242,19 @@ body.dark #map {
     filter: saturate(0.85) brightness(0.92) invert(1) hue-rotate(180deg);
 }
 
-/* ---------- ELEVATION PROFILE ---------- */
+/* ELEVATION PROFILE */
 .elevation-profile {
     display: flex;
     flex-direction: column;
     background: var(--surface);
     border-top: 1.5px solid var(--line-strong);
     padding: 8px 16px 6px 16px;
-    transition: background 0.4s ease, border-color 0.4s ease, height 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.3s ease, padding 0.3s ease;
+    transition:
+        background 0.4s ease,
+        border-color 0.4s ease,
+        height 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+        opacity 0.3s ease,
+        padding 0.3s ease;
     flex-shrink: 0;
     height: var(--elevation-height);
     overflow: hidden;
@@ -289,12 +296,15 @@ body.dark #map {
     height: 5px;
     border-radius: 6px;
     display: inline-block;
-    transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
+    transition:
+        background 0.2s,
+        transform 0.2s,
+        box-shadow 0.2s;
     position: relative;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 .elevation-title .resize-handle::after {
-    content: '⇅';
+    content: "⇅";
     position: absolute;
     left: 50%;
     top: 50%;
@@ -349,7 +359,7 @@ body.dark #map {
     flex-shrink: 0;
 }
 
-/* ---------- FORM ELEMENTS ---------- */
+/* FORM */
 .input-group {
     margin-bottom: 0;
 }
@@ -385,7 +395,7 @@ select:focus {
     transform: translateY(-1px);
 }
 
-/* ---------- BUTTONS ---------- */
+/* BUTTONS */
 button {
     width: 100%;
     padding: 10px 12px;
@@ -405,10 +415,14 @@ button {
     overflow: hidden;
 }
 button::after {
-    content: '';
+    content: "";
     position: absolute;
     inset: 0;
-    background: radial-gradient(circle at center, rgba(255, 255, 255, 0.15) 0%, transparent 70%);
+    background: radial-gradient(
+        circle at center,
+        rgba(255, 255, 255, 0.15) 0%,
+        transparent 70%
+    );
     opacity: 0;
     transition: opacity 0.3s;
 }
@@ -443,17 +457,7 @@ button.danger:hover {
     box-shadow: var(--shadow-lg);
 }
 
-button.secondary {
-    background: var(--surface-alt);
-    border: 1.5px solid var(--moss);
-    color: var(--pine);
-}
-button.secondary:hover {
-    background: var(--line);
-    transform: translateY(-2px);
-}
-
-/* ---------- STOPS ---------- */
+/* STOPS */
 .stops-list {
     margin: 14px 0 10px;
 }
@@ -484,7 +488,7 @@ button.secondary:hover {
     padding-left: 4px;
 }
 .stops-items::before {
-    content: '';
+    content: "";
     position: absolute;
     top: 18px;
     bottom: 18px;
@@ -581,7 +585,7 @@ button.secondary:hover {
     transform: scale(1.15) rotate(4deg);
 }
 
-/* ---------- RESULTS ---------- */
+/* RESULTS */
 .results-card {
     background: var(--surface-alt);
     border-radius: var(--radius);
@@ -619,7 +623,22 @@ body.dark .stat-value {
     color: var(--trail);
 }
 
-/* ---------- LOADING ---------- */
+.algo-badge {
+    display: inline-block;
+    background: var(--gold);
+    color: #fff;
+    padding: 0 10px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+body.dark .algo-badge {
+    background: var(--trail);
+}
+
+/* LOADING */
 .loading-overlay {
     position: fixed;
     top: var(--header-height);
@@ -679,7 +698,7 @@ body.dark .stat-value {
     }
 }
 
-/* ---------- SCROLLBAR ---------- */
+/* SCROLLBAR */
 ::-webkit-scrollbar {
     width: 5px;
     height: 5px;
@@ -695,13 +714,11 @@ body.dark .stat-value {
     background: var(--trail);
 }
 
-/* ---------- RESPONSIVE ---------- */
+/* RESPONSIVE */
 @media (max-width: 767px) {
-
     .header {
         margin-top: 7%;
     }
-    
     .header h1 {
         font-size: 1rem;
     }
@@ -776,9 +793,7 @@ body.dark .stat-value {
     .controls-grid {
         display: block;
     }
-    .addr-group,
-    .mode-group,
-    .algo-group {
+    .addr-group {
         margin-bottom: 16px;
     }
     .button-group {
