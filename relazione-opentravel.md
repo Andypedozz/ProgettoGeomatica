@@ -279,7 +279,7 @@ dp[(1<<i)][i] = 0   // per ogni i
 dp[mask][last] = min su prev∈(mask senza last) di:
                    dp[mask senza last][prev] + durations[prev][last]
 ```
-Nel codice questa doppia iterazione è realizzata con tre cicli annidati (`mask`, `last`, `prev`), e ogni stato `(mask, last)` è tenuto in una `Map` con chiave stringa `"mask,last"` (anziché un array 2D, probabilmente per semplicità/robustezza in JS con numeri di tappe non fissi). Viene tenuta anche una mappa `parent` per poter **ricostruire il cammino** a ritroso una volta trovato il minimo.
+Nel codice questa doppia iterazione è realizzata con tre cicli annidati (`mask`, `last`, `prev`), e ogni stato `(mask, last)` è tenuto in una `Map` con chiave stringa `"mask,last"`. Viene tenuta anche una mappa `parent` per poter **ricostruire il cammino** a ritroso una volta trovato il minimo.
 
 **Passo finale**: si cerca, tra tutti i possibili "ultimi nodi" `last`, quello che minimizza `dp[fullMask][last]`, dove `fullMask = (1<<n)-1` rappresenta "tutte le tappe visitate". Poiché è un TSP aperto, **non si aggiunge il costo di ritorno** all'origine: si prende semplicemente il minimo su tutte le possibili tappe finali.
 
