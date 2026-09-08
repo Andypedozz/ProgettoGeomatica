@@ -95,6 +95,104 @@ class RoutePlanner {
             });
 
         this.EXACT_LIMIT = 12;
+
+        window.addEventListener("offline", () => this.setOfflineState(true));
+        window.addEventListener("online", () => {
+            this.setOfflineState(false);
+            this.showToast("Connessione a Internet ripristinata.", "success", 3000);
+        });
+        if (!navigator.onLine) this.setOfflineState(true);
+    }
+
+    /* ---------- Gestione errori e notifiche ---------- */
+
+    setOfflineState(isOffline) {
+        const banner = document.getElementById("offlineBanner");
+        if (banner) banner.classList.toggle("visible", isOffline);
+        if (isOffline) {
+            this.showToast(
+                "Sei offline: ricerca indirizzi, calcolo del percorso e profilo altimetrico non sono disponibili.",
+                "warning",
+                6000,
+            );
+        }
+    }
+
+    showToast(message, type = "error", duration = 5000) {
+        const container = document.getElementById("toastContainer");
+        if (!container) {
+            alert(message);
+            return;
+        }
+        const icons = { error: "⚠️", warning: "⚠️", info: "ℹ️", success: "✅" };
+        const el = document.createElement("div");
+        el.className = `toast toast-${type}`;
+        el.innerHTML = `<span class="toast-icon">${icons[type] || "⚠️"}</span><span class="toast-msg"></span><button class="toast-close" aria-label="Chiudi">✕</button>`;
+        el.querySelector(".toast-msg").textContent = message;
+        el.querySelector(".toast-close").addEventListener("click", () =>
+            el.remove(),
+        );
+        container.appendChild(el);
+        setTimeout(() => {
+            el.classList.add("toast-hide");
+            setTimeout(() => el.remove(), 300);
+        }, duration);
+    }
+
+    // Traduce un errore tecnico in un messaggio comprensibile per l'utente
+    friendlyMessage(error, context) {
+        if (error && error.isNetworkError) {
+            return `Connessione assente o instabile: impossibile completare ${context}. Controlla la rete e riprova.`;
+        }
+        if (error && error.isServiceError) {
+            return `Il servizio esterno non è al momento disponibile (${context}). Riprova tra poco.`;
+        }
+        return (error && error.message) || `Si è verificato un errore durante ${context}.`;
+    }
+
+    // fetch con: controllo stato rete, timeout, e distinzione tra errore di rete / errore del servizio
+    async fetchJSON(url, options = {}, timeoutMs = 15000) {
+        if (!navigator.onLine) {
+            const err = new Error(
+                "Nessuna connessione a Internet. Controlla la rete e riprova.",
+            );
+            err.isNetworkError = true;
+            throw err;
+        }
+
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        let response;
+        try {
+            response = await fetch(url, { ...options, signal: controller.signal });
+        } catch (e) {
+            const err = new Error(
+                e.name === "AbortError"
+                    ? "Il servizio non ha risposto in tempo utile."
+                    : "Impossibile contattare il servizio. Controlla la connessione a Internet.",
+            );
+            err.isNetworkError = true;
+            throw err;
+        } finally {
+            clearTimeout(timer);
+        }
+
+        if (!response.ok) {
+            const err = new Error(
+                `Il servizio ha risposto con un errore (codice ${response.status}).`,
+            );
+            err.isServiceError = true;
+            err.status = response.status;
+            throw err;
+        }
+
+        try {
+            return await response.json();
+        } catch (e) {
+            const err = new Error("Risposta del servizio non valida.");
+            err.isServiceError = true;
+            throw err;
+        }
     }
 
     scheduleMapResize() {
@@ -218,21 +316,39 @@ class RoutePlanner {
             await new Promise((r) => setTimeout(r, 1100));
         this.lastNominatim = Date.now();
         const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}&limit=1`;
-        const r = await fetch(url, { headers: { "User-Agent": "TSP-App" } });
-        const d = await r.json();
+        const d = await this.fetchJSON(url, {
+            headers: { "User-Agent": "TSP-App" },
+        });
         if (!d.length) return null;
         return { lat: +d[0].lat, lng: +d[0].lon };
     }
 
     async addByAddress() {
-        const addr = document.getElementById("addr").value;
-        if (!addr) return alert("Inserisci un indirizzo");
+        const addr = document.getElementById("addr").value.trim();
+        if (!addr) {
+            this.showToast("Inserisci un indirizzo prima di continuare.", "warning");
+            return;
+        }
         this.showLoading();
-        const g = await this.geocode(addr);
-        this.hideLoading();
-        if (!g) return alert("Indirizzo non trovato");
-        this.addPoint(g.lat, g.lng);
-        this.map.setView([g.lat, g.lng], 13);
+        try {
+            const g = await this.geocode(addr);
+            if (!g) {
+                this.showToast(
+                    "Indirizzo non trovato. Prova a essere più specifico (es. via, città).",
+                    "warning",
+                );
+                return;
+            }
+            this.addPoint(g.lat, g.lng);
+            this.map.setView([g.lat, g.lng], 13);
+        } catch (error) {
+            this.showToast(
+                this.friendlyMessage(error, "la ricerca dell'indirizzo"),
+                "error",
+            );
+        } finally {
+            this.hideLoading();
+        }
     }
 
     async buildMatrix() {
@@ -243,8 +359,14 @@ class RoutePlanner {
         }
         const coords = this.points.map((p) => `${p.lng},${p.lat}`).join(";");
         const url = `https://router.project-osrm.org/table/v1/driving/${coords}?annotations=duration,distance`;
-        const r = await fetch(url);
-        const d = await r.json();
+        const d = await this.fetchJSON(url);
+        if (!d.durations || !d.distances) {
+            const err = new Error(
+                "Il servizio di routing non ha restituito una matrice valida (forse alcune tappe non sono raggiungibili in auto).",
+            );
+            err.isServiceError = true;
+            throw err;
+        }
         this.matrix = { durations: d.durations, distances: d.distances };
         this.cache.set(key, this.matrix);
     }
@@ -391,7 +513,17 @@ class RoutePlanner {
 
     async calculate() {
         if (this.points.length < 2) {
-            alert("Inserisci almeno 2 tappe");
+            this.showToast(
+                "Aggiungi almeno 2 tappe per calcolare un percorso.",
+                "warning",
+            );
+            return;
+        }
+        if (!navigator.onLine) {
+            this.showToast(
+                "Sei offline: il calcolo del percorso richiede una connessione a Internet.",
+                "error",
+            );
             return;
         }
 
@@ -410,19 +542,23 @@ class RoutePlanner {
             if (n <= this.EXACT_LIMIT) {
                 path = this.heldKarp();
                 algoName = "Concorde (esatto)";
-                if (!path) throw new Error("Errore nel calcolo esatto");
+                if (!path) throw new Error("Errore nel calcolo esatto del percorso.");
             } else {
                 const nnPath = this.multiStartNN();
                 path = this.twoOpt(nnPath);
                 algoName = "2-Opt + Nearest Neighbor (euristico)";
                 if (!path || path.length !== this.points.length)
-                    throw new Error("Errore nel calcolo euristico");
+                    throw new Error("Errore nel calcolo euristico del percorso.");
             }
 
             await this.draw(path, algoName);
             this.rebuildMarkers(path);
         } catch (error) {
-            alert("Errore: " + error.message);
+            this.showToast(
+                this.friendlyMessage(error, "il calcolo del percorso"),
+                "error",
+                7000,
+            );
         } finally {
             this.hideLoading();
         }
@@ -433,10 +569,14 @@ class RoutePlanner {
             .map((i) => `${this.points[i].lng},${this.points[i].lat}`)
             .join(";");
         const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson&steps=true`;
-        const r = await fetch(url);
-        const d = await r.json();
-        if (!d.routes || d.routes.length === 0)
-            throw new Error("Percorso non disponibile");
+        const d = await this.fetchJSON(url);
+        if (!d.routes || d.routes.length === 0) {
+            const err = new Error(
+                "Percorso non disponibile tra le tappe selezionate (potrebbero non essere raggiungibili in auto).",
+            );
+            err.isServiceError = true;
+            throw err;
+        }
 
         const route = d.routes[0];
 
@@ -458,7 +598,7 @@ class RoutePlanner {
                     `;
 
         try {
-            const elevData = await this.fetchElevationProfile(path);
+            const elevData = await this.fetchElevationProfile(path, route.geometry);
             this.elevationData = elevData;
             document
                 .getElementById("elevationProfile")
@@ -467,6 +607,14 @@ class RoutePlanner {
         } catch (err) {
             console.warn("Profilo altimetrico non disponibile:", err);
             this.hideElevationProfile();
+            const detail = err && err.isNetworkError
+                ? "connessione assente o instabile."
+                : "il servizio di elevazione non è disponibile al momento.";
+            this.showToast(
+                `Percorso calcolato, ma il profilo altimetrico non è disponibile: ${detail}`,
+                "warning",
+                6000,
+            );
         }
 
         requestAnimationFrame(() => {
@@ -475,17 +623,17 @@ class RoutePlanner {
         });
     }
 
-    async fetchElevationProfile(path) {
-        const coords = path
-            .map((i) => `${this.points[i].lng},${this.points[i].lat}`)
-            .join(";");
-        const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson&steps=true`;
-        const r = await fetch(url);
-        const d = await r.json();
-        if (!d.routes || d.routes.length === 0)
-            throw new Error("Percorso non disponibile");
-
-        const geometry = d.routes[0].geometry;
+    async fetchElevationProfile(path, geometry = null) {
+        if (!geometry) {
+            const coords = path
+                .map((i) => `${this.points[i].lng},${this.points[i].lat}`)
+                .join(";");
+            const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson&steps=true`;
+            const d = await this.fetchJSON(url);
+            if (!d.routes || d.routes.length === 0)
+                throw new Error("Percorso non disponibile.");
+            geometry = d.routes[0].geometry;
+        }
         const points = geometry.coordinates.map((c) => ({
             lng: c[0],
             lat: c[1],
@@ -501,13 +649,16 @@ class RoutePlanner {
                 longitude: p.lng,
             })),
         };
-        const elevR = await fetch(elevUrl, {
+        const elevD = await this.fetchJSON(elevUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
         });
-        if (!elevR.ok) throw new Error("Errore nel recupero altitudini");
-        const elevD = await elevR.json();
+        if (!elevD.results) {
+            const err = new Error("Dati di elevazione non disponibili.");
+            err.isServiceError = true;
+            throw err;
+        }
 
         let cumulativeDist = 0;
         const distances = [0];

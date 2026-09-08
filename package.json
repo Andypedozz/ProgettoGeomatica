@@ -4,7 +4,8 @@
   "description": "App client-side per percorsi ottimali con profilo altimetrico",
   "main": "index.html",
   "scripts": {
-    "start": "cd src && index.html",
+    "start-win": "cd src && index.html",
+    "start-lin": "cd src && xdg-open index.html",
     "build": "cd .. && pnpm cap build android",
     "build-debug": "cd android && gradlew assembleDebug",
     "sync": "pnpm cap sync",
