@@ -258,8 +258,6 @@ if (n <= this.EXACT_LIMIT) {
 }
 ```
 
-(Nota: l'etichetta mostrata all'utente per l'algoritmo esatto è "Concorde (esatto)" — un nome improprio ereditato probabilmente da un altro contesto, dato che l'implementazione reale non usa il risolutore Concorde ma un algoritmo di **programmazione dinamica di Held-Karp**, descritto sotto.)
-
 ### 5.1 Algoritmo esatto: Held-Karp (bitmask DP)
 
 Usato quando il numero di tappe è **≤ 12**. È l'algoritmo classico che risolve il TSP in tempo esponenziale ma molto più rapido della forza bruta (`O(2^n · n^2)` contro `O(n!)`).
@@ -340,7 +338,6 @@ La soglia di 12 tappe è il classico compromesso: oltre questo numero, `2^n` cre
 ## 7. Osservazioni, limiti e possibili miglioramenti
 
 - **Doppia chiamata a `/route`**: come notato al §4.5, `draw()` e `fetchElevationProfile()` interrogano entrambi OSRM Route con parametri identici; si potrebbe passare la geometria già ottenuta in `draw()` direttamente a `fetchElevationProfile()`, dimezzando le chiamate di rete per ogni calcolo.
-- **Etichetta "Concorde"**: fuorviante, dato che l'algoritmo esatto implementato è Held-Karp e non il risolutore Concorde TSP (un software C completamente diverso, non presente nel codice).
 - **Approssimazione delle distanze locali**: il fattore fisso `111.32` km/grado usato nel calcolo delle distanze per il profilo altimetrico è corretto solo per la latitudine; introduce un piccolo errore sulla componente longitudinale che cresce allontanandosi dall'equatore (trascurabile alle latitudini italiane, ma concettualmente impreciso).
 - **Dipendenza da servizi pubblici gratuiti**: sia il server demo di OSRM (`router.project-osrm.org`) sia Open-Elevation sono istanze pubbliche con limiti di traffico non garantiti; per un uso in produzione andrebbero sostituiti con istanze proprie o piani a pagamento.
 - **2-opt senza limite di tempo**: per un numero di tappe grande (es. centinaia), il ciclo `while(improved)` di `twoOpt` potrebbe richiedere molte iterazioni; non è presente un limite massimo di iterazioni o un timeout, il che in casi estremi potrebbe rallentare l'interfaccia (single-thread).
